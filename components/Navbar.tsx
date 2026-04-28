@@ -11,6 +11,9 @@ export default function Navbar() {
           <span className="hidden sm:inline text-xs text-gray-400 border border-ivory-200 px-1.5 py-0.5 font-body">POC</span>
         </Link>
         <div className="flex items-center gap-6">
+           <Link href="/events" className="text-sm text-gray-500 hover:text-forest-600 font-medium transition-colors tracking-wide">
+            Events
+          </Link>
           <Link href="/rooms" className="text-sm text-gray-500 hover:text-forest-600 font-medium transition-colors tracking-wide">
             Rooms
           </Link>
