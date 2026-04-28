@@ -1,0 +1,99 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Inter:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --color-forest: #1B4332;
+  --color-gold: #B8960C;
+  --color-ivory: #FAF7F2;
+  --color-crimson: #C0392B;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-ivory);
+  color: #1a1a1a;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 { font-family: var(--font-display); }
+
+/* ─── Stagger Delays ─────────────────────────────────────────────────────────── */
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+
+/* ─── Keyframes ──────────────────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes checkDraw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* ─── Animate on Load ────────────────────────────────────────────────────────── */
+.animate-on-load {
+  opacity: 0;
+  animation: fadeUp 0.6s ease forwards;
+}
+
+/* ─── Navbar ─────────────────────────────────────────────────────────────────── */
+.navbar-glass {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(184, 150, 12, 0.15);
+}
+
+/* ─── Room Card ──────────────────────────────────────────────────────────────── */
+.room-card {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.room-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 40px rgba(27, 67, 50, 0.12);
+}
+
+/* ─── Skeleton ───────────────────────────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg, #ede8e0 25%, #f5f0e8 50%, #ede8e0 75%);
+  background-size: 200% 100%;
+  animation: skeletonPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes skeletonPulse {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── Reservation Timer ──────────────────────────────────────────────────────── */
+.timer-bar {
+  transition: width 1s linear;
+}
+
+/* ─── Check SVG ──────────────────────────────────────────────────────────────── */
+.check-path {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: checkDraw 0.6s ease 0.3s forwards;
+}
+
+/* ─── Gold Divider ───────────────────────────────────────────────────────────── */
+.gold-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #B8960C, transparent);
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #f0ebe3; }
+::-webkit-scrollbar-thumb { background: #8dc3a8; border-radius: 3px; }
