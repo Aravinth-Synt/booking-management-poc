@@ -274,7 +274,15 @@ export interface RezdyBookingRequest {
   sendNotifications?: boolean;
 }
 
+export interface RezdyRequestStatus {
+  success: boolean;
+  error?: {
+    errorMessage?: string;
+  } | string;
+}
+
 export interface RezdyBookingResponse {
+  requestStatus?: RezdyRequestStatus;
   booking?: {
     orderNumber?: string;
   };

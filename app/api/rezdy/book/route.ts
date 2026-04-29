@@ -14,12 +14,16 @@ export async function POST(request: NextRequest) {
     }
 
     const response = await createRezdyBooking(body);
+    const requestStatus = response.requestStatus;
+    const isSuccess = requestStatus?.success === true;
 
-    if (!response.requestStatus?.success) {
-      return NextResponse.json(
-        { error: response.requestStatus?.error?.errorMessage ?? 'Booking failed' },
-        { status: 422 }
-      );
+    if (!isSuccess) {
+      const errorMessage =
+        typeof requestStatus?.error === 'string'
+          ? requestStatus.error
+          : requestStatus?.error?.errorMessage ?? 'Booking failed';
+
+      return NextResponse.json({ error: errorMessage }, { status: 422 });
     }
 
     return NextResponse.json(response);
