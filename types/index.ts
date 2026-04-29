@@ -112,8 +112,18 @@ export interface CTAttribute {
 export interface CTVariant {
   id: number;
   sku?: string;
+  key?: string;
   prices?: CTPrice[];
   images?: CTImage[];
+  attributes?: CTAttribute[];
+}
+
+export interface CTProductData {
+  name: LocalizedString;
+  description?: LocalizedString;
+  slug: LocalizedString;
+  masterVariant: CTVariant;
+  variants?: CTVariant[];
   attributes?: CTAttribute[];
 }
 
@@ -131,12 +141,31 @@ export interface CTProductProjection {
   lastModifiedAt: string;
 }
 
+export interface CTProduct {
+  id: string;
+  key?: string;
+  version: number;
+  masterData: {
+    current: CTProductData;
+  };
+  createdAt: string;
+  lastModifiedAt: string;
+}
+
 export interface CTProductProjectionPagedQueryResponse {
   limit: number;
   offset: number;
   count: number;
   total: number;
   results: CTProductProjection[];
+}
+
+export interface CTProductPagedQueryResponse {
+  limit: number;
+  offset: number;
+  count: number;
+  total: number;
+  results: CTProduct[];
 }
 export type SyncStatus = 'synced' | 'pending' | 'error';
 
@@ -155,6 +184,19 @@ export interface TourProduct {
   tags: string[];
   productType: string;
   rezdyCode: string;
+  eventDate?: string;
+  eventTime?: string;
+  venueName?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  ticketUrl?: string;
+  saleStart?: string;
+  saleEnd?: string;
+  statusLabel?: string;
+  genre?: string;
+  subGenre?: string;
+  externalEventId?: string;
   syncStatus: SyncStatus;
 }
 

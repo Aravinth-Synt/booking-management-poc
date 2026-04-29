@@ -2,6 +2,9 @@ import { ctRequest } from './auth';
 import getRedisClient from '@/lib/redis/client';
 import type {
   CTAttribute,
+  CTProduct,
+  CTProductData,
+  CTProductPagedQueryResponse,
   CTProductProjection,
   CTProductProjectionPagedQueryResponse,
   CTVariant,
@@ -59,6 +62,15 @@ function getAttrValue(variant: CTVariant, ...names: string[]): CTAttribute['valu
   return undefined;
 }
 
+function getAttributeValue(attributes: CTAttribute[] | undefined, ...names: string[]): CTAttribute['value'] | undefined {
+  for (const name of names) {
+    const value = attributes?.find((a) => a.name === name)?.value;
+    if (value !== undefined) return value;
+  }
+
+  return undefined;
+}
+
 function attrValueToString(value: CTAttribute['value'] | undefined): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'number') return String(value);
@@ -85,6 +97,10 @@ function getAttrString(variant: CTVariant, ...names: string[]): string {
   return attrValueToString(getAttrValue(variant, ...names));
 }
 
+function getAttributeString(attributes: CTAttribute[] | undefined, ...names: string[]): string {
+  return attrValueToString(getAttributeValue(attributes, ...names));
+}
+
 function getAttrNumber(variant: CTVariant, ...names: string[]): number {
   const value = getAttrValue(variant, ...names);
   if (typeof value === 'number') return value;
@@ -94,6 +110,26 @@ function getAttrNumber(variant: CTVariant, ...names: string[]): number {
 
 function getAttrStringList(variant: CTVariant, ...names: string[]): string[] {
   const value = getAttrValue(variant, ...names);
+
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => attrValueToString(entry))
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function getAttributeStringList(attributes: CTAttribute[] | undefined, ...names: string[]): string[] {
+  const value = getAttributeValue(attributes, ...names);
 
   if (Array.isArray(value)) {
     return value
@@ -218,6 +254,22 @@ function buildProductProjectionPath(params: {
   return `/product-projections?${search.toString()}`;
 }
 
+function buildProductsPath(params: {
+  limit?: number;
+  offset?: number;
+  where?: string[];
+}): string {
+  const search = new URLSearchParams();
+  search.set('limit', String(params.limit ?? 20));
+  search.set('offset', String(params.offset ?? 0));
+
+  for (const whereClause of params.where ?? []) {
+    search.append('where', whereClause);
+  }
+
+  return `/products?${search.toString()}`;
+}
+
 async function readCache<T>(key: string): Promise<T | null> {
   try {
     const redis = getRedisClient();
@@ -280,30 +332,98 @@ export function ctProjectionToRoom(p: CTProductProjection): RoomProduct {
 }
 
 export function ctProjectionToTourProduct(p: CTProductProjection): TourProduct {
-  const v = p.masterVariant;
+  return ctProductDataToTourProduct({
+    id: p.id,
+    key: p.key,
+    data: {
+      name: p.name,
+      description: p.description,
+      slug: p.slug,
+      masterVariant: p.masterVariant,
+      variants: p.variants,
+      attributes: [],
+    },
+  });
+}
+
+function ctProductDataToTourProduct(params: {
+  id: string;
+  key?: string;
+  data: CTProductData;
+}): TourProduct {
+  const { id, key, data } = params;
+  const v = data.masterVariant;
+  const productAttributes = data.attributes ?? [];
   const centAmount = v.prices?.[0]?.value?.centAmount ?? 0;
   const fractionDigits = v.prices?.[0]?.value?.fractionDigits ?? 2;
   const price = centAmount / Math.pow(10, fractionDigits);
-  const description = getLocalizedValue(p.description);
-  const rezdyCode = getAttrString(v, 'rezdy-product-code') || v.sku || p.key || p.id;
+  const description = getLocalizedValue(data.description);
+  const rezdyCode =
+    getAttributeString(productAttributes, 'eventId') ||
+    getAttrString(v, 'rezdy-product-code') ||
+    v.sku ||
+    key ||
+    id;
+  const venueName = getAttributeString(productAttributes, 'venueName');
+  const city = getAttributeString(productAttributes, 'city');
+  const state = getAttributeString(productAttributes, 'state');
+  const country = getAttributeString(productAttributes, 'country');
+  const segment = getAttributeString(productAttributes, 'segment');
+  const genre = getAttributeString(productAttributes, 'genre');
+  const subGenre = getAttributeString(productAttributes, 'subGenre');
+  const productType = segment || genre || subGenre || getAttrString(v, 'product-type') || 'EVENT';
+  const location = [venueName, city, state].filter(Boolean).join(', ');
+  const tags = Array.from(
+    new Set([
+      ...getTags(v),
+      ...getAttributeStringList(productAttributes, 'tags'),
+      segment,
+      genre,
+      subGenre,
+      city,
+      state,
+      country,
+    ].filter(Boolean))
+  );
 
   return {
-    id: p.id,
-    ctId: p.id,
-    ctKey: p.key ?? rezdyCode,
-    name: getLocalizedValue(p.name),
+    id,
+    ctId: id,
+    ctKey: key ?? rezdyCode,
+    name: getLocalizedValue(data.name),
     shortDescription: description.slice(0, 140),
     description,
     imageUrl: v.images?.[0]?.url ?? '',
     price,
     currency: v.prices?.[0]?.value?.currencyCode ?? 'AUD',
     durationMinutes: getAttrNumber(v, 'rezdy-duration'),
-    location: getAttrString(v, 'rezdy-location'),
-    tags: getTags(v),
-    productType: getAttrString(v, 'product-type') || 'TOUR',
+    location,
+    tags,
+    productType,
     rezdyCode,
+    eventDate: getAttributeString(productAttributes, 'eventDate'),
+    eventTime: getAttributeString(productAttributes, 'eventTime'),
+    venueName,
+    city,
+    state,
+    country,
+    ticketUrl: getAttributeString(productAttributes, 'url'),
+    saleStart: getAttributeString(productAttributes, 'saleStart'),
+    saleEnd: getAttributeString(productAttributes, 'saleEnd'),
+    statusLabel: getAttributeString(productAttributes, 'status'),
+    genre,
+    subGenre,
+    externalEventId: getAttributeString(productAttributes, 'eventId'),
     syncStatus: 'synced',
   };
+}
+
+function ctProductToTourProduct(product: CTProduct): TourProduct {
+  return ctProductDataToTourProduct({
+    id: product.id,
+    key: product.key,
+    data: product.masterData.current,
+  });
 }
 
 export async function getCTProducts(limit = 20, offset = 0): Promise<TourProduct[]> {
@@ -311,10 +431,10 @@ export async function getCTProducts(limit = 20, offset = 0): Promise<TourProduct
   return withCache(`ct:products:list:${limit}:${offset}:${cacheScope}`, async () => {
     const productTypeId = await resolveProductTypeId(CATALOG_PRODUCT_TYPE_ID, CATALOG_PRODUCT_TYPE_KEY);
     const where = getProductTypeWhereClause(productTypeId);
-    const data = await ctRequest<CTProductProjectionPagedQueryResponse>(
-      buildProductProjectionPath({ limit, offset, where })
+    const data = await ctRequest<CTProductPagedQueryResponse>(
+      buildProductsPath({ limit, offset, where })
     );
-    return (data.results ?? []).map(ctProjectionToTourProduct);
+    return (data.results ?? []).map(ctProductToTourProduct);
   });
 }
 
@@ -324,14 +444,14 @@ export async function searchCTProducts(query: string, limit = 20, offset = 0): P
   return withCache(`ct:products:search:${trimmed}:${limit}:${offset}:${cacheScope}`, async () => {
     const productTypeId = await resolveProductTypeId(CATALOG_PRODUCT_TYPE_ID, CATALOG_PRODUCT_TYPE_KEY);
     const where = getProductTypeWhereClause(productTypeId);
-    const data = await ctRequest<CTProductProjectionPagedQueryResponse>(
-      buildProductProjectionPath({ limit, offset, where, text: trimmed })
+    const data = await ctRequest<CTProductPagedQueryResponse>(
+      buildProductsPath({ limit: 200, offset: 0, where })
     );
 
-    if (!trimmed) return (data.results ?? []).map(ctProjectionToTourProduct);
+    const products = (data.results ?? []).map(ctProductToTourProduct);
+    if (!trimmed) return products.slice(offset, offset + limit);
 
-    return (data.results ?? [])
-      .map(ctProjectionToTourProduct)
+    return products
       .filter((product) => {
         return matchesSearchTokens([
           product.name,
@@ -339,9 +459,17 @@ export async function searchCTProducts(query: string, limit = 20, offset = 0): P
           product.description,
           product.location,
           product.rezdyCode,
+          product.venueName ?? '',
+          product.city ?? '',
+          product.state ?? '',
+          product.genre ?? '',
+          product.subGenre ?? '',
+          product.eventDate ?? '',
+          product.eventTime ?? '',
           ...product.tags,
         ], trimmed);
-      });
+      })
+      .slice(offset, offset + limit);
   });
 }
 
@@ -366,8 +494,8 @@ export async function getCTTourProductByKey(key: string): Promise<TourProduct | 
 export async function getEventById(id: string): Promise<TourProduct | null> {
   return withCache(`ct:products:id:${id}`, async () => {
     try {
-      const product = await ctRequest<CTProductProjection>(`/product-projections/${encodeURIComponent(id)}?staged=false`);
-      return ctProjectionToTourProduct(product);
+      const product = await ctRequest<CTProduct>(`/products/${encodeURIComponent(id)}`);
+      return ctProductToTourProduct(product);
     } catch (error) {
       if (error instanceof Error && error.message.includes('CT API error 404')) {
         return null;

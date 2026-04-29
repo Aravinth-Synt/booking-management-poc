@@ -70,15 +70,17 @@ export default function EventCard({ event, delay = 0 }: EventCardProps) {
         </p>
 
         {/* Description (use venue + city) */}
-        <p className="text-sm text-gray-400 mb-3">
-          {/* {event.venue}, {event.city} */}
-        </p>
+        {(event.venueName || event.city || event.state) && (
+          <p className="text-sm text-gray-400 mb-3">
+            {[event.venueName, event.city, event.state].filter(Boolean).join(", ")}
+          </p>
+        )}
 
         {/* Optional: remaining seats */}
         {/* {event.remaining && ( */}
         <div className="mb-4">
           <span className="text-xs px-2 py-1 bg-ivory-50 text-gray-500 border border-ivory-200">
-            3 tickets left
+            {event.statusLabel || "On Sale"}
           </span>
         </div>
         {/* )} */}

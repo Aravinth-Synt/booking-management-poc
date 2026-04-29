@@ -12,15 +12,31 @@ function inferCategory(product: TourProduct): EventCategory {
 }
 
 function productToEvent(product: TourProduct): Event {
+  const dateParts = [product.eventDate, product.eventTime].filter(Boolean);
+  const displayDate = dateParts.length > 0 ? dateParts.join(' ') : (product.durationMinutes > 0 ? `${product.durationMinutes} min experience` : 'Available now');
+
   return {
     id: product.ctId ?? product.id,
     name: product.name,
     description: product.shortDescription || product.description,
-    date: product.durationMinutes > 0 ? `${product.durationMinutes} min experience` : 'Available now',
+    date: displayDate,
     category: inferCategory(product),
     image: product.imageUrl,
     price: product.price > 0 ? `${product.currency} ${product.price}` : undefined,
     eventType: product.productType,
+    eventDate: product.eventDate,
+    eventTime: product.eventTime,
+    venueName: product.venueName,
+    city: product.city,
+    state: product.state,
+    country: product.country,
+    ticketUrl: product.ticketUrl,
+    saleStart: product.saleStart,
+    saleEnd: product.saleEnd,
+    statusLabel: product.statusLabel,
+    genre: product.genre,
+    subGenre: product.subGenre,
+    externalEventId: product.externalEventId,
   };
 }
 

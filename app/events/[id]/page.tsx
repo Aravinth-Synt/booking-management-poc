@@ -114,6 +114,45 @@ export default function EventDetailPage() {
             <h1 className="font-display text-4xl font-semibold text-gray-900">{event.name}</h1>
             <div className="gold-divider w-12 mt-4 mb-8" />
             <p className="text-gray-500 leading-relaxed text-lg">{event.description}</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8">
+              {event.venueName && (
+                <div className="bg-white border border-ivory-200 p-4">
+                  <p className="text-xs text-gray-400 tracking-wider uppercase mb-1">Venue</p>
+                  <p className="text-sm text-gray-700">{event.venueName}</p>
+                </div>
+              )}
+              {(event.city || event.state || event.country) && (
+                <div className="bg-white border border-ivory-200 p-4">
+                  <p className="text-xs text-gray-400 tracking-wider uppercase mb-1">Location</p>
+                  <p className="text-sm text-gray-700">{[event.city, event.state, event.country].filter(Boolean).join(', ')}</p>
+                </div>
+              )}
+              {event.statusLabel && (
+                <div className="bg-white border border-ivory-200 p-4">
+                  <p className="text-xs text-gray-400 tracking-wider uppercase mb-1">Status</p>
+                  <p className="text-sm text-gray-700">{event.statusLabel}</p>
+                </div>
+              )}
+              {(event.genre || event.subGenre) && (
+                <div className="bg-white border border-ivory-200 p-4">
+                  <p className="text-xs text-gray-400 tracking-wider uppercase mb-1">Category</p>
+                  <p className="text-sm text-gray-700">{[event.genre, event.subGenre].filter(Boolean).join(' / ')}</p>
+                </div>
+              )}
+              {event.saleStart && (
+                <div className="bg-white border border-ivory-200 p-4">
+                  <p className="text-xs text-gray-400 tracking-wider uppercase mb-1">Sales Start</p>
+                  <p className="text-sm text-gray-700">{event.saleStart}</p>
+                </div>
+              )}
+              {event.saleEnd && (
+                <div className="bg-white border border-ivory-200 p-4">
+                  <p className="text-xs text-gray-400 tracking-wider uppercase mb-1">Sales End</p>
+                  <p className="text-sm text-gray-700">{event.saleEnd}</p>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="bg-white border border-ivory-200 p-6 self-start sticky top-24 space-y-5">
@@ -126,8 +165,19 @@ export default function EventDetailPage() {
 
             <div>
               <p className="text-xs text-gray-400 tracking-wider uppercase mb-1">Availability</p>
-              <p className="text-sm text-gray-600">3 tickets left</p>
+              <p className="text-sm text-gray-600">{event.statusLabel || 'Available'}</p>
             </div>
+
+            {event.ticketUrl && (
+              <a
+                href={event.ticketUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="block w-full py-3 text-center text-sm font-medium tracking-wider uppercase border border-forest-500 text-forest-600 hover:bg-forest-50 transition-colors"
+              >
+                Open Ticket Link
+              </a>
+            )}
 
             <Link
               href="/events"
