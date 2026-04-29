@@ -102,7 +102,7 @@ export default function EventDetailPage() {
             </span>
             {event.eventType && (
               <span className="text-xs font-medium px-3 py-1 border bg-white/80 text-gray-700 border-ivory-200">
-                {event.eventType}
+                {event.statusLabel?.toUpperCase() || event.eventType.toUpperCase()}
               </span>
             )}
           </div>
@@ -131,7 +131,7 @@ export default function EventDetailPage() {
               {event.statusLabel && (
                 <div className="bg-white border border-ivory-200 p-4">
                   <p className="text-xs text-gray-400 tracking-wider uppercase mb-1">Status</p>
-                  <p className="text-sm text-gray-700">{event.statusLabel}</p>
+                  <p className="text-sm text-gray-700">{event.statusLabel.toUpperCase()}</p>
                 </div>
               )}
               {(event.genre || event.subGenre) && (
@@ -165,7 +165,7 @@ export default function EventDetailPage() {
 
             <div>
               <p className="text-xs text-gray-400 tracking-wider uppercase mb-1">Availability</p>
-              <p className="text-sm text-gray-600">{event.statusLabel || 'Available'}</p>
+              <p className="text-sm text-gray-600">{event.statusLabel?.toUpperCase() || 'Available'}</p>
             </div>
 
             {event.ticketUrl && (
