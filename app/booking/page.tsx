@@ -382,12 +382,10 @@ function BookingPageInner() {
   // Resolve product
   useEffect(() => {
     if (!productCode) return;
-    fetch('/api/rezdy/products')
+    fetch(`/api/commercetools/products?key=${encodeURIComponent(productCode)}`)
       .then((r) => r.json())
       .then((data) => {
-        const tours: TourProduct[] = data.tours ?? MOCK_TOURS;
-        const found = tours.find((t) => t.rezdyCode === productCode);
-        setProduct(found ?? MOCK_TOURS[0]);
+        setProduct(data.product ?? (MOCK_TOURS.find((t) => t.rezdyCode === productCode) ?? MOCK_TOURS[0]));
       })
       .catch(() => {
         const found = MOCK_TOURS.find((t) => t.rezdyCode === productCode);

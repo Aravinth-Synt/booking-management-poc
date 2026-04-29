@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
+import ProductExplorer from '@/components/ProductExplorer';
 
 const STATS = [
   { label: 'Room Types', value: '5' },
@@ -113,6 +114,8 @@ export default function HomePage() {
       </section>
 
       {/* ── Footer ── */}
+      <ProductExplorer />
+
       <footer className="border-t border-ivory-200 py-10 text-center text-sm text-gray-400">
         <p className="font-display text-lg text-gray-700 mb-1">LondonStay POC</p>
         <p className="text-xs">Powered by <span className="text-forest-500 font-medium">commercetools</span> × <span className="text-gold-600 font-medium">Redis</span> · Next.js 14</p>

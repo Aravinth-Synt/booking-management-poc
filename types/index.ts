@@ -100,7 +100,13 @@ export interface CTImage {
 
 export interface CTAttribute {
   name: string;
-  value: string | number | boolean | LocalizedString;
+  value:
+    | string
+    | number
+    | boolean
+    | LocalizedString
+    | Array<string | number | boolean | LocalizedString>
+    | Record<string, unknown>;
 }
 
 export interface CTVariant {
@@ -131,4 +137,121 @@ export interface CTProductProjectionPagedQueryResponse {
   count: number;
   total: number;
   results: CTProductProjection[];
+}
+export type SyncStatus = 'synced' | 'pending' | 'error';
+
+export interface TourProduct {
+  id: string;
+  ctId?: string;
+  ctKey?: string;
+  name: string;
+  shortDescription: string;
+  description: string;
+  imageUrl: string;
+  price: number;
+  currency: string;
+  durationMinutes: number;
+  location: string;
+  tags: string[];
+  productType: string;
+  rezdyCode: string;
+  syncStatus: SyncStatus;
+}
+
+export interface RezdyPriceOption {
+  label: string;
+  type: string;
+  price: number;
+}
+
+export interface RezdySession {
+  id: string;
+  productCode: string;
+  startTimeLocal: string;
+  endTimeLocal: string;
+  seatsAvailable: number;
+  seatsReserved: number;
+  priceOptions?: RezdyPriceOption[];
+}
+
+export interface BookingQuantity {
+  optionLabel: string;
+  value: number;
+  price: number;
+}
+
+export interface RezdyProduct {
+  productCode: string;
+  name: string;
+  shortDescription?: string;
+  description?: string;
+  advertisedPrice?: number;
+  currency?: string;
+  durationMinutes?: number;
+  tags?: string[];
+  productType?: string;
+  priceOptions?: RezdyPriceOption[];
+  images?: Array<{
+    itemUrl?: string;
+    mediumSizeUrl?: string;
+    largeSizeUrl?: string;
+  }>;
+  locationAddress?: {
+    city?: string;
+    state?: string;
+    countryCode?: string;
+  };
+  supplier?: {
+    name?: string;
+  };
+}
+
+export interface RezdyBookingRequest {
+  customer: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+  };
+  items: Array<{
+    productCode: string;
+    startTimeLocal: string;
+    endTimeLocal: string;
+    quantities: Array<{
+      optionLabel: string;
+      value: number;
+    }>;
+    amount: number;
+  }>;
+  payments?: Array<{
+    type: string;
+    amount: number;
+    currency: string;
+    label?: string;
+  }>;
+  sendNotifications?: boolean;
+}
+
+export interface RezdyBookingResponse {
+  booking?: {
+    orderNumber?: string;
+  };
+  [key: string]: unknown;
+}
+
+export interface SyncResult {
+  productCode: string;
+  name: string;
+  action: 'created' | 'updated' | 'skipped' | 'error';
+  error?: string;
+}
+
+export interface FullSyncReport {
+  total: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: number;
+  results: SyncResult[];
+  durationMs: number;
 }

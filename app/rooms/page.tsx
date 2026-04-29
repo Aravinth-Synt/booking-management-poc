@@ -6,12 +6,11 @@ import RoomCard from '@/components/RoomCard';
 import type { RoomProduct, RoomCategory, RoomAmenity, LockStatusResponse } from '@/types';
 import { MOCK_ROOMS } from '@/data/mockRooms';
 
-const CATEGORIES: (RoomCategory | 'ALL')[] = ['ALL', 'LUXURY', 'MODERATE', 'BUDGET'];
-const AMENITIES: { value: RoomAmenity | 'ALL'; label: string }[] = [
-  { value: 'ALL', label: 'All' },
-  { value: 'AC', label: 'Air Conditioned' },
-  { value: 'NON_AC', label: 'Natural Ventilation' },
-];
+const CATEGORY_ORDER: RoomCategory[] = ['LUXURY', 'MODERATE', 'BUDGET'];
+const AMENITY_LABELS: Record<RoomAmenity, string> = {
+  AC: 'Air Conditioned',
+  NON_AC: 'Natural Ventilation',
+};
 
 function SkeletonCard() {
   return (
@@ -34,19 +33,26 @@ export default function RoomsPage() {
   const [rooms, setRooms] = useState<RoomProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState<'ct' | 'mock'>('mock');
+  const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
   const [category, setCategory] = useState<RoomCategory | 'ALL'>('ALL');
   const [amenity, setAmenity] = useState<RoomAmenity | 'ALL'>('ALL');
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
-  async function fetchRooms() {
+  async function fetchRooms(search = '') {
     try {
-      const res = await fetch('/api/rooms');
+      const searchParams = new URLSearchParams();
+      if (search.trim()) searchParams.set('q', search.trim());
+      const path = searchParams.size > 0 ? `/api/rooms?${searchParams.toString()}` : '/api/rooms';
+      const res = await fetch(path);
       const data = await res.json();
       setRooms(data.rooms ?? MOCK_ROOMS);
       setSource(data.source ?? 'mock');
+      setError(data.error ?? '');
     } catch {
       setRooms(MOCK_ROOMS);
       setSource('mock');
+      setError('Unable to load commercetools rooms.');
     } finally {
       setLoading(false);
     }
@@ -72,8 +78,13 @@ export default function RoomsPage() {
   }
 
   useEffect(() => {
-    fetchRooms();
-  }, []);
+    const timeout = setTimeout(() => {
+      setLoading(true);
+      fetchRooms(query);
+    }, 250);
+
+    return () => clearTimeout(timeout);
+  }, [query]);
 
   useEffect(() => {
     if (rooms.length === 0) return;
@@ -81,6 +92,21 @@ export default function RoomsPage() {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rooms.length]);
+
+  const categories: Array<RoomCategory | 'ALL'> = [
+    'ALL',
+    ...CATEGORY_ORDER.filter((candidate) => rooms.some((room) => room.category === candidate)),
+  ];
+
+  const amenities: Array<{ value: RoomAmenity | 'ALL'; label: string }> = [
+    { value: 'ALL', label: 'All' },
+    ...(['AC', 'NON_AC'] as RoomAmenity[])
+      .filter((candidate) => rooms.some((room) => room.amenity === candidate))
+      .map((candidate) => ({
+        value: candidate,
+        label: AMENITY_LABELS[candidate],
+      })),
+  ];
 
   const filtered = rooms.filter((r) => {
     if (category !== 'ALL' && r.category !== category) return false;
@@ -109,13 +135,30 @@ export default function RoomsPage() {
               )}
             </p>
           )}
+          {!loading && error && (
+            <p className="text-sm text-coral-600 mt-2">{error}</p>
+          )}
           <div className="gold-divider w-16 mt-4" />
+        </div>
+
+        <div className="mb-8">
+          <label htmlFor="room-search" className="sr-only">
+            Search rooms
+          </label>
+          <input
+            id="room-search"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search rooms, amenities, or room numbers"
+            className="w-full max-w-md border border-ivory-200 bg-white px-4 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-300"
+          />
         </div>
 
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-4 mb-8">
           <div className="flex gap-2 flex-wrap">
-            {CATEGORIES.map((cat) => (
+            {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setCategory(cat)}
@@ -130,7 +173,7 @@ export default function RoomsPage() {
             ))}
           </div>
           <div className="flex gap-2 flex-wrap sm:ml-auto">
-            {AMENITIES.map((a) => (
+            {amenities.map((a) => (
               <button
                 key={a.value}
                 onClick={() => setAmenity(a.value)}

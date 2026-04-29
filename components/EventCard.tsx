@@ -19,6 +19,8 @@ interface EventCardProps {
 }
 
 export default function EventCard({ event, delay = 0 }: EventCardProps) {
+  const hasPrice = Boolean(event.price);
+
   return (
     <div
       className="bg-white border border-ivory-100 overflow-hidden animate-on-load"
@@ -83,12 +85,16 @@ export default function EventCard({ event, delay = 0 }: EventCardProps) {
 
         {/* Bottom section (same as room price section) */}
         <div className="flex items-end justify-between">
-          <div>
-            <p className="text-xs text-gray-400">Price</p>
-            <p className="font-display text-2xl font-semibold text-gray-900">
-              {event.price || "Free"}
-            </p>
-          </div>
+          {hasPrice ? (
+            <div>
+              <p className="text-xs text-gray-400">Price</p>
+              <p className="font-display text-2xl font-semibold text-gray-900">
+                {event.price}
+              </p>
+            </div>
+          ) : (
+            <div />
+          )}
 
           <Link
             href={`/events/${event.id}`}

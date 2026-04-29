@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import type { Event } from "../../types/events";
-import RoomCard from "@/components/RoomCard";
 import EventCard from "@/components/EventCard";
 
 function SkeletonCard() {
@@ -21,28 +20,40 @@ function SkeletonCard() {
 
 export default function EventsPage() {
   const [events, setEvents] = useState<Event[]>([]);
+  const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("ALL");
   const [loading, setLoading] = useState(true);
-  const [source, setSource] = useState<"ct" | "mock">("mock");
+  const [source, setSource] = useState<"ct" | "mock">("ct");
+  const [error, setError] = useState("");
 
-  async function fetchEvents() {
+  async function fetchEvents(search = "") {
     try {
-      const res = await fetch("/api/events");
+      const searchParams = new URLSearchParams();
+      if (search.trim()) searchParams.set("q", search.trim());
+      const path = searchParams.size > 0 ? `/api/events?${searchParams.toString()}` : "/api/events";
+      const res = await fetch(path);
       const data = await res.json();
 
       setEvents(data.events ?? []);
-      setSource(data.source ?? "mock");
+      setSource(data.source ?? "ct");
+      setError(data.error ?? "");
     } catch {
       setEvents([]);
-      setSource("mock");
+      setSource("ct");
+      setError("Unable to load commercetools events.");
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    fetchEvents();
-  }, []);
+    const timeout = setTimeout(() => {
+      setLoading(true);
+      fetchEvents(query);
+    }, 250);
+
+    return () => clearTimeout(timeout);
+  }, [query]);
 
   const categories = [
     "ALL",
@@ -77,15 +88,28 @@ export default function EventsPage() {
           {!loading && (
             <p className="text-gray-400 text-sm">
               {events.length} event{events.length !== 1 ? "s" : ""} available
-              {source === "mock" && (
-                <span className="ml-2 text-xs bg-ivory-100 text-gray-400 border px-2 py-0.5 rounded-full">
-                  demo data
-                </span>
-              )}
             </p>
           )}
 
+          {!loading && error && (
+            <p className="text-sm text-coral-600 mt-2">{error}</p>
+          )}
+
           <div className="gold-divider w-16 mt-4" />
+        </div>
+
+        <div className="mb-8">
+          <label htmlFor="event-search" className="sr-only">
+            Search events
+          </label>
+          <input
+            id="event-search"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search synced commercetools products"
+            className="w-full max-w-md border border-ivory-200 bg-white px-4 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-300"
+          />
         </div>
 
         <div className="flex gap-2 flex-wrap mb-8">

@@ -14,6 +14,15 @@ interface TokenCache {
 
 let tokenCache: TokenCache | null = null;
 
+function isRealEnvValue(value: string): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized.startsWith('your-')) return false;
+  if (normalized.includes('placeholder')) return false;
+  return true;
+}
+
 export function getCTConfig(): CTConfig {
   return {
     projectKey: process.env.CT_PROJECT_KEY ?? '',
@@ -21,7 +30,7 @@ export function getCTConfig(): CTConfig {
     clientSecret: process.env.CT_CLIENT_SECRET ?? '',
     authUrl: process.env.CT_AUTH_URL ?? 'https://auth.us-central1.gcp.commercetools.com',
     apiUrl: process.env.CT_API_URL ?? 'https://api.us-central1.gcp.commercetools.com',
-    scope: process.env.CT_SCOPE ?? '',
+    scope: process.env.CT_SCOPE ?? process.env.CT_SCOPES ?? '',
   };
 }
 
@@ -35,8 +44,10 @@ export async function getCTAccessToken(): Promise<string> {
 
   const { clientId, clientSecret, authUrl, scope, projectKey } = getCTConfig();
 
-  if (!clientId || !clientSecret) {
-    throw new Error('commercetools credentials not configured');
+  if (!isRealEnvValue(projectKey) || !isRealEnvValue(clientId) || !isRealEnvValue(clientSecret)) {
+    throw new Error(
+      'commercetools credentials not configured. Add CT_PROJECT_KEY, CT_CLIENT_ID, and CT_CLIENT_SECRET to .env.local and restart the dev server.'
+    );
   }
 
   const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');

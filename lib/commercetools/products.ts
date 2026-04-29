@@ -1,36 +1,248 @@
 import { ctRequest } from './auth';
+import getRedisClient from '@/lib/redis/client';
 import type {
+  CTAttribute,
   CTProductProjection,
   CTProductProjectionPagedQueryResponse,
   CTVariant,
-  CTAttribute,
   LocalizedString,
-  RoomProduct,
-  RoomCategory,
   RoomAmenity,
+  RoomCategory,
+  RoomProduct,
+  TourProduct,
 } from '@/types';
 
 const ROOM_PRODUCT_TYPE_ID = process.env.CT_PRODUCT_TYPE_ID ?? '';
+const ROOM_PRODUCT_TYPE_KEY = process.env.CT_ACCOMMODATION_PRODUCT_TYPE_KEY ?? '';
+const CATALOG_PRODUCT_TYPE_ID = process.env.CT_CATALOG_PRODUCT_TYPE_ID ?? '';
+const CATALOG_PRODUCT_TYPE_KEY =
+  process.env.CT_CATALOG_PRODUCT_TYPE_KEY ?? process.env.CT_PRODUCT_TYPE_KEY ?? '';
+const PRODUCT_CACHE_TTL_SECONDS = 300;
+const CT_LOCALE = process.env.CT_LOCALE ?? 'en-US';
+
+interface CTProductType {
+  id: string;
+  key?: string;
+}
+
+interface CTProductTypePagedQueryResponse {
+  results?: CTProductType[];
+}
+
+function getProductTypeWhereClause(productTypeId: string): string[] {
+  return productTypeId ? [`productType(id="${productTypeId}")`] : [];
+}
+
+async function resolveProductTypeId(productTypeId: string, productTypeKey: string): Promise<string> {
+  if (productTypeId) return productTypeId;
+  if (!productTypeKey) return '';
+
+  return withCache(`ct:product-type:key:${productTypeKey}`, async () => {
+    const data = await ctRequest<CTProductTypePagedQueryResponse>(
+      `/product-types?where=${encodeURIComponent(`key="${productTypeKey}"`)}&limit=1`
+    );
+    return data.results?.[0]?.id ?? '';
+  });
+}
 
 function getLocalizedValue(obj: LocalizedString | undefined): string {
   if (!obj) return '';
-  return obj.en ?? Object.values(obj)[0] ?? '';
+  return obj[CT_LOCALE] ?? obj.en ?? obj['en-US'] ?? obj['en-GB'] ?? Object.values(obj)[0] ?? '';
 }
 
-function getAttrString(variant: CTVariant, name: string): string {
-  const attr = variant.attributes?.find((a: CTAttribute) => a.name === name);
-  if (!attr) return '';
-  const v = attr.value;
-  if (typeof v === 'string') return v;
-  if (typeof v === 'number') return String(v);
-  if (typeof v === 'object' && 'en' in v) return (v as LocalizedString).en;
-  return String(v);
+function getAttrValue(variant: CTVariant, ...names: string[]): CTAttribute['value'] | undefined {
+  for (const name of names) {
+    const value = variant.attributes?.find((a) => a.name === name)?.value;
+    if (value !== undefined) return value;
+  }
+
+  return undefined;
 }
 
-function getAttrNumber(variant: CTVariant, name: string): number {
-  const attr = variant.attributes?.find((a: CTAttribute) => a.name === name);
-  if (!attr) return 0;
-  return Number(attr.value);
+function attrValueToString(value: CTAttribute['value'] | undefined): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return String(value);
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => attrValueToString(entry))
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .join(', ');
+  }
+  if (value && typeof value === 'object') {
+    if ('key' in value && typeof value.key === 'string' && value.key.trim()) return value.key;
+    if ('label' in value && value.label && typeof value.label === 'object') {
+      return getLocalizedValue(value.label as LocalizedString);
+    }
+    if ('en' in value && typeof value.en === 'string') return value.en;
+    if ('en-US' in value && typeof value['en-US'] === 'string') return value['en-US'];
+    if ('en-GB' in value && typeof value['en-GB'] === 'string') return value['en-GB'];
+  }
+  return '';
+}
+
+function getAttrString(variant: CTVariant, ...names: string[]): string {
+  return attrValueToString(getAttrValue(variant, ...names));
+}
+
+function getAttrNumber(variant: CTVariant, ...names: string[]): number {
+  const value = getAttrValue(variant, ...names);
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') return Number(value);
+  return 0;
+}
+
+function getAttrStringList(variant: CTVariant, ...names: string[]): string[] {
+  const value = getAttrValue(variant, ...names);
+
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => attrValueToString(entry))
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function normalizeEnumLabel(value: string): string {
+  return value
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '_');
+}
+
+function mapRoomCategory(value: string): RoomCategory {
+  const normalized = normalizeEnumLabel(value);
+
+  if (normalized === 'LUXURY' || normalized === 'MODERATE' || normalized === 'BUDGET') {
+    return normalized;
+  }
+
+  if (normalized.includes('LUXURY') || normalized.includes('DELUXE') || normalized.includes('PENTHOUSE')) {
+    return 'LUXURY';
+  }
+
+  if (normalized.includes('BUDGET') || normalized.includes('STANDARD') || normalized.includes('ECONOMY')) {
+    return 'BUDGET';
+  }
+
+  if (normalized.includes('MODERATE') || normalized.includes('SUPERIOR') || normalized.includes('CLASSIC')) {
+    return 'MODERATE';
+  }
+
+  return 'MODERATE';
+}
+
+function mapRoomAmenity(value: string): RoomAmenity {
+  const normalized = normalizeEnumLabel(value);
+
+  if (normalized === 'AC' || normalized === 'NON_AC') {
+    return normalized;
+  }
+
+  if (
+    normalized.includes('NON_AC') ||
+    normalized.includes('NONAC') ||
+    normalized.includes('NATURAL_VENTILATION') ||
+    normalized.includes('FAN')
+  ) {
+    return 'NON_AC';
+  }
+
+  if (
+    normalized.includes('AIR_CONDITIONED') ||
+    normalized.includes('AIR_CONDITIONING') ||
+    normalized === 'AC'
+  ) {
+    return 'AC';
+  }
+
+  return 'AC';
+}
+
+function getTags(variant: CTVariant): string[] {
+  const raw = getAttrString(variant, 'rezdy-tags');
+  return raw
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
+function tokenizeSearch(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function matchesSearchTokens(haystackValues: string[], query: string): boolean {
+  const tokens = tokenizeSearch(query);
+  if (tokens.length === 0) return true;
+
+  const haystack = haystackValues.join(' ').toLowerCase();
+  return tokens.every((token) => haystack.includes(token));
+}
+
+function buildProductProjectionPath(params: {
+  limit?: number;
+  offset?: number;
+  where?: string[];
+  text?: string;
+}): string {
+  const search = new URLSearchParams();
+  search.set('limit', String(params.limit ?? 20));
+  search.set('offset', String(params.offset ?? 0));
+  search.set('staged', 'false');
+
+  for (const whereClause of params.where ?? []) {
+    search.append('where', whereClause);
+  }
+
+  if (params.text) {
+    search.set(`text.${CT_LOCALE}`, params.text);
+    search.set('fuzzy', 'true');
+    search.set('fuzzyLevel', '1');
+  }
+
+  return `/product-projections?${search.toString()}`;
+}
+
+async function readCache<T>(key: string): Promise<T | null> {
+  try {
+    const redis = getRedisClient();
+    const raw = await redis.get(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCache<T>(key: string, value: T): Promise<void> {
+  try {
+    const redis = getRedisClient();
+    await redis.set(key, JSON.stringify(value), 'EX', PRODUCT_CACHE_TTL_SECONDS);
+  } catch {
+    // Ignore Redis failures so catalogue requests can still succeed.
+  }
+}
+
+async function withCache<T>(key: string, loader: () => Promise<T>): Promise<T> {
+  const cached = await readCache<T>(key);
+  if (cached !== null) return cached;
+  const value = await loader();
+  await writeCache(key, value);
+  return value;
 }
 
 export function ctProjectionToRoom(p: CTProductProjection): RoomProduct {
@@ -38,37 +250,186 @@ export function ctProjectionToRoom(p: CTProductProjection): RoomProduct {
   const centAmount = v.prices?.[0]?.value?.centAmount ?? 0;
   const fractionDigits = v.prices?.[0]?.value?.fractionDigits ?? 2;
   const pricePerNight = centAmount / Math.pow(10, fractionDigits);
-  const amenitiesRaw = getAttrString(v, 'room-amenities');
+  const rawCategory = getAttrString(v, 'room-category', 'roomCategory', 'category');
+  const rawAmenity = getAttrString(v, 'room-amenity', 'roomAmenity', 'air-conditioning', 'airConditioning');
+  const amenities = getAttrStringList(v, 'room-amenities', 'roomAmenities', 'amenities');
+  const category = mapRoomCategory(rawCategory);
+  const amenity = mapRoomAmenity(rawAmenity);
+  const roomNumber = getAttrString(v, 'room-number', 'roomNumber', 'room-no', 'roomNo') || v.sku || p.key || p.id;
+  const floor = getAttrNumber(v, 'room-floor', 'roomFloor', 'floor');
+  const maxGuests = getAttrNumber(v, 'room-max-guests', 'roomMaxGuests', 'max-guests', 'maxGuests') || 2;
+  const amenityBadges = amenity === 'AC' ? ['AC'] : ['Natural Ventilation'];
+  const mergedAmenities = Array.from(new Set([...amenityBadges, ...amenities]));
 
   return {
     id: p.id,
     ctKey: p.key ?? '',
     name: getLocalizedValue(p.name),
     description: getLocalizedValue(p.description),
-    category: (getAttrString(v, 'room-category') as RoomCategory) || 'MODERATE',
-    amenity: (getAttrString(v, 'room-amenity') as RoomAmenity) || 'AC',
-    floor: getAttrNumber(v, 'room-floor'),
-    roomNumber: getAttrString(v, 'room-number'),
+    category,
+    amenity,
+    floor,
+    roomNumber,
     pricePerNight,
-    maxGuests: getAttrNumber(v, 'room-max-guests') || 2,
+    maxGuests,
     images: v.images?.map((img) => img.url) ?? [],
-    amenities: amenitiesRaw ? amenitiesRaw.split(',').map((s) => s.trim()) : [],
+    amenities: mergedAmenities,
     status: 'available',
     lockStatus: 'available',
   };
 }
 
+export function ctProjectionToTourProduct(p: CTProductProjection): TourProduct {
+  const v = p.masterVariant;
+  const centAmount = v.prices?.[0]?.value?.centAmount ?? 0;
+  const fractionDigits = v.prices?.[0]?.value?.fractionDigits ?? 2;
+  const price = centAmount / Math.pow(10, fractionDigits);
+  const description = getLocalizedValue(p.description);
+  const rezdyCode = getAttrString(v, 'rezdy-product-code') || v.sku || p.key || p.id;
+
+  return {
+    id: rezdyCode,
+    ctId: p.id,
+    ctKey: p.key ?? rezdyCode,
+    name: getLocalizedValue(p.name),
+    shortDescription: description.slice(0, 140),
+    description,
+    imageUrl: v.images?.[0]?.url ?? '',
+    price,
+    currency: v.prices?.[0]?.value?.currencyCode ?? 'AUD',
+    durationMinutes: getAttrNumber(v, 'rezdy-duration'),
+    location: getAttrString(v, 'rezdy-location'),
+    tags: getTags(v),
+    productType: getAttrString(v, 'product-type') || 'TOUR',
+    rezdyCode,
+    syncStatus: 'synced',
+  };
+}
+
+export async function getCTProducts(limit = 20, offset = 0): Promise<TourProduct[]> {
+  const cacheScope = CATALOG_PRODUCT_TYPE_ID || CATALOG_PRODUCT_TYPE_KEY || 'all';
+  return withCache(`ct:products:list:${limit}:${offset}:${cacheScope}`, async () => {
+    const productTypeId = await resolveProductTypeId(CATALOG_PRODUCT_TYPE_ID, CATALOG_PRODUCT_TYPE_KEY);
+    const where = getProductTypeWhereClause(productTypeId);
+    const data = await ctRequest<CTProductProjectionPagedQueryResponse>(
+      buildProductProjectionPath({ limit, offset, where })
+    );
+    return (data.results ?? []).map(ctProjectionToTourProduct);
+  });
+}
+
+export async function searchCTProducts(query: string, limit = 20, offset = 0): Promise<TourProduct[]> {
+  const trimmed = query.trim();
+  const cacheScope = CATALOG_PRODUCT_TYPE_ID || CATALOG_PRODUCT_TYPE_KEY || 'all';
+  return withCache(`ct:products:search:${trimmed}:${limit}:${offset}:${cacheScope}`, async () => {
+    const productTypeId = await resolveProductTypeId(CATALOG_PRODUCT_TYPE_ID, CATALOG_PRODUCT_TYPE_KEY);
+    const where = getProductTypeWhereClause(productTypeId);
+    const data = await ctRequest<CTProductProjectionPagedQueryResponse>(
+      buildProductProjectionPath({ limit, offset, where, text: trimmed })
+    );
+
+    if (!trimmed) return (data.results ?? []).map(ctProjectionToTourProduct);
+
+    return (data.results ?? [])
+      .map(ctProjectionToTourProduct)
+      .filter((product) => {
+        return matchesSearchTokens([
+          product.name,
+          product.shortDescription,
+          product.description,
+          product.location,
+          product.rezdyCode,
+          ...product.tags,
+        ], trimmed);
+      });
+  });
+}
+
+export async function getCTProductByKey(key: string): Promise<CTProductProjection | null> {
+  try {
+    return await ctRequest<CTProductProjection>(`/product-projections/key=${encodeURIComponent(key)}?staged=false`);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('CT API error 404')) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export async function getCTTourProductByKey(key: string): Promise<TourProduct | null> {
+  return withCache(`ct:products:key:${key}`, async () => {
+    const product = await getCTProductByKey(key);
+    return product ? ctProjectionToTourProduct(product) : null;
+  });
+}
+
 export async function getRooms(limit = 20, offset = 0): Promise<RoomProduct[]> {
-  const whereClause = ROOM_PRODUCT_TYPE_ID
-    ? `&where=productType(id%3D%22${ROOM_PRODUCT_TYPE_ID}%22)`
-    : '';
+  const productTypeId = await resolveProductTypeId(ROOM_PRODUCT_TYPE_ID, ROOM_PRODUCT_TYPE_KEY);
+  const where = getProductTypeWhereClause(productTypeId);
   const data = await ctRequest<CTProductProjectionPagedQueryResponse>(
-    `/product-projections?limit=${limit}&offset=${offset}&staged=false${whereClause}`
+    buildProductProjectionPath({ limit, offset, where })
   );
   return (data.results ?? []).map(ctProjectionToRoom);
+}
+
+export async function searchRooms(query: string, limit = 20, offset = 0): Promise<RoomProduct[]> {
+  const trimmed = query.trim();
+  const cacheScope = ROOM_PRODUCT_TYPE_ID || ROOM_PRODUCT_TYPE_KEY || 'all';
+  return withCache(`ct:rooms:search:${trimmed}:${limit}:${offset}:${cacheScope}`, async () => {
+    const productTypeId = await resolveProductTypeId(ROOM_PRODUCT_TYPE_ID, ROOM_PRODUCT_TYPE_KEY);
+    const where = getProductTypeWhereClause(productTypeId);
+    const data = await ctRequest<CTProductProjectionPagedQueryResponse>(
+      buildProductProjectionPath({ limit, offset, where, text: trimmed })
+    );
+
+    return (data.results ?? [])
+      .map(ctProjectionToRoom)
+      .filter((room) =>
+        matchesSearchTokens(
+          [
+            room.name,
+            room.description,
+            room.category,
+            room.amenity,
+            room.roomNumber,
+            String(room.floor),
+            ...room.amenities,
+          ],
+          trimmed
+        )
+      );
+  });
 }
 
 export async function getRoomById(id: string): Promise<RoomProduct> {
   const data = await ctRequest<CTProductProjection>(`/product-projections/${id}?staged=false`);
   return ctProjectionToRoom(data);
+}
+
+export async function createCTProduct(draft: Record<string, unknown>): Promise<CTProductProjection> {
+  return ctRequest<CTProductProjection>('/products', {
+    method: 'POST',
+    body: JSON.stringify(draft),
+  });
+}
+
+export async function updateCTProduct(
+  id: string,
+  version: number,
+  actions: Record<string, unknown>[]
+): Promise<CTProductProjection> {
+  return ctRequest<CTProductProjection>(`/products/${id}`, {
+    method: 'POST',
+    body: JSON.stringify({ version, actions }),
+  });
+}
+
+export async function publishCTProduct(id: string, version: number): Promise<CTProductProjection> {
+  return ctRequest<CTProductProjection>(`/products/${id}`, {
+    method: 'POST',
+    body: JSON.stringify({
+      version,
+      actions: [{ action: 'publish' }],
+    }),
+  });
 }
