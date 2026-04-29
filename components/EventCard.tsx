@@ -49,7 +49,7 @@ export default function EventCard({ event, delay = 0 }: EventCardProps) {
         {/* Bookmark icon (same place as AC badge) */}
         <div className="absolute top-3 right-3">
           <span className="text-xs font-medium px-2.5 py-1 bg-white/90 border">
-            {event.eventType}
+            {event.statusLabel?.toUpperCase() || "ON SALE"}
           </span>
         </div>
       </div>
@@ -58,32 +58,25 @@ export default function EventCard({ event, delay = 0 }: EventCardProps) {
       <div className="p-5">
         {/* Date instead of RoomStatus */}
         <div className="mb-3">
-          <span className="text-xs text-gray-500">{event.date}</span>
+          <label htmlFor="start-date" className="text-xs text-gray-500 font-semibold">Event Date: </label>
+          <span className="text-xs text-gray-500">{event.eventDate}</span>
         </div>
 
         {/* Title */}
-        <h3 className="font-display text-xl font-semibold text-gray-900 mb-2">
+        <h3 className="font-display text-xl font-semibold line-clamp-2 text-gray-900 mb-2">
           {event.name}
         </h3>
-        <p className="text-sm text-gray-400 line-clamp-2 mb-3 leading-relaxed">
+        <p className="text-sm text-gray-400 line-clamp-2 mb-2 leading-relaxed">
           {event.description}
         </p>
 
         {/* Description (use venue + city) */}
+          <label htmlFor="venue-name" className="text-sm text-gray-600 mb-3">Venue:</label>
         {(event.venueName || event.city || event.state) && (
-          <p className="text-sm text-gray-400 mb-3">
+          <p className="text-sm text-gray-400 mb-4">
             {[event.venueName, event.city, event.state].filter(Boolean).join(", ")}
           </p>
         )}
-
-        {/* Optional: remaining seats */}
-        {/* {event.remaining && ( */}
-        <div className="mb-4">
-          <span className="text-xs px-2 py-1 bg-ivory-50 text-gray-500 border border-ivory-200">
-            {event.statusLabel || "On Sale"}
-          </span>
-        </div>
-        {/* )} */}
 
         {/* Bottom section (same as room price section) */}
         <div className="flex items-end justify-between">
