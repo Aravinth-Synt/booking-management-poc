@@ -75,7 +75,7 @@ export async function getRezdyBooking(orderNumber: string): Promise<RezdyBooking
 export function getRezdyImageUrl(product: RezdyProduct): string {
   const img = product.images?.[0];
   if (!img) return 'https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?w=800&q=80';
-  return img.largeSizeUrl || img.mediumSizeUrl || img.itemUrl;
+  return img.largeSizeUrl ?? img.mediumSizeUrl ?? img.itemUrl ?? 'https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?w=800&q=80';
 }
 
 export function formatRezdyLocation(product: RezdyProduct): string {
