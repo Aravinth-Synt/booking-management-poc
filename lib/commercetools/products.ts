@@ -363,6 +363,20 @@ export async function getCTTourProductByKey(key: string): Promise<TourProduct | 
   });
 }
 
+export async function getEventById(id: string): Promise<TourProduct | null> {
+  return withCache(`ct:products:id:${id}`, async () => {
+    try {
+      const product = await ctRequest<CTProductProjection>(`/product-projections/${encodeURIComponent(id)}?staged=false`);
+      return ctProjectionToTourProduct(product);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('CT API error 404')) {
+        return null;
+      }
+      throw error;
+    }
+  });
+}
+
 export async function getRooms(limit = 20, offset = 0): Promise<RoomProduct[]> {
   const productTypeId = await resolveProductTypeId(ROOM_PRODUCT_TYPE_ID, ROOM_PRODUCT_TYPE_KEY);
   const where = getProductTypeWhereClause(productTypeId);

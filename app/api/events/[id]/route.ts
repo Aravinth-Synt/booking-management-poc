@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCTProducts, searchCTProducts } from '@/lib/commercetools/products';
+import { getEventById } from '@/lib/commercetools/products';
 import type { TourProduct } from '@/types';
 import type { Event, EventCategory } from '@/types/events';
 
@@ -24,27 +24,20 @@ function productToEvent(product: TourProduct): Event {
   };
 }
 
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const q = searchParams.get('q')?.trim() ?? '';
+export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const products = q ? await searchCTProducts(q, 50, 0) : await getCTProducts(50, 0);
-    const events = products.map(productToEvent);
+    const product = await getEventById(params.id);
+
+    if (!product) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
 
     return NextResponse.json({
-      events,
-      total: events.length,
+      event: productToEvent(product),
       source: 'ct',
-      query: q,
-      error: events.length === 0 ? 'No commercetools catalogue products were found. Check CT_CATALOG_PRODUCT_TYPE_ID.' : null,
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to load commercetools products';
-    return NextResponse.json({
-      events: [],
-      total: 0,
-      source: 'ct',
-      error: message,
-    }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Failed to load commercetools event';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
