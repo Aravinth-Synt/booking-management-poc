@@ -15,6 +15,19 @@ const CATEGORY_STYLE: Record<string, string> = {
   Culture: 'bg-ivory-100 text-gray-500 border-ivory-300',
 };
 
+function formatDateTime(dateString: string) {
+  const date = new Date(dateString);
+
+  return date.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
 function SkeletonPage() {
   return (
     <div className="min-h-screen bg-ivory-50">
@@ -110,7 +123,7 @@ export default function EventDetailPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
           <div className="lg:col-span-2">
-            <p className="text-xs text-gray-400 tracking-wider uppercase mb-2">{event.date}</p>
+            <p className="text-xs text-gray-400 tracking-wider mb-2 font-semibold">Event Date: {event.eventDate}</p>
             <h1 className="font-display text-4xl font-semibold text-gray-900">{event.name}</h1>
             <div className="gold-divider w-12 mt-4 mb-8" />
             <p className="text-gray-500 leading-relaxed text-lg">{event.description}</p>
@@ -143,13 +156,13 @@ export default function EventDetailPage() {
               {event.saleStart && (
                 <div className="bg-white border border-ivory-200 p-4">
                   <p className="text-xs text-gray-400 tracking-wider uppercase mb-1">Sales Start</p>
-                  <p className="text-sm text-gray-700">{event.saleStart}</p>
+                  <p className="text-sm text-gray-700">{formatDateTime(event.saleStart)}</p>
                 </div>
               )}
               {event.saleEnd && (
                 <div className="bg-white border border-ivory-200 p-4">
                   <p className="text-xs text-gray-400 tracking-wider uppercase mb-1">Sales End</p>
-                  <p className="text-sm text-gray-700">{event.saleEnd}</p>
+                  <p className="text-sm text-gray-700">{formatDateTime(event.saleEnd)}</p>
                 </div>
               )}
             </div>
