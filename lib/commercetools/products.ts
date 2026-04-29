@@ -288,7 +288,7 @@ export function ctProjectionToTourProduct(p: CTProductProjection): TourProduct {
   const rezdyCode = getAttrString(v, 'rezdy-product-code') || v.sku || p.key || p.id;
 
   return {
-    id: rezdyCode,
+    id: p.id,
     ctId: p.id,
     ctKey: p.key ?? rezdyCode,
     name: getLocalizedValue(p.name),
