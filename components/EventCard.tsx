@@ -66,14 +66,14 @@ export default function EventCard({ event, delay = 0 }: EventCardProps) {
         <h3 className="font-display text-xl font-semibold line-clamp-2 text-gray-900 mb-2">
           {event.name}
         </h3>
-        <p className="text-sm text-gray-400 line-clamp-2 mb-2 leading-relaxed">
+        {/* <p className="text-sm text-gray-400 line-clamp-2 mb-2 leading-relaxed">
           {event.description}
-        </p>
+        </p> */}
 
         {/* Description (use venue + city) */}
           <label htmlFor="venue-name" className="text-sm text-gray-600 mb-3">Venue:</label>
         {(event.venueName || event.city || event.state) && (
-          <p className="text-sm text-gray-400 mb-4">
+          <p className="text-sm text-gray-400 mb-4 h-8">
             {[event.venueName, event.city, event.state].filter(Boolean).join(", ")}
           </p>
         )}
