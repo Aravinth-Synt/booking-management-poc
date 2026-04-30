@@ -3,6 +3,7 @@ const nextConfig = {
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'images.ctassets.net' },
+      { protocol: 'https', hostname: 'images.us-east-2.aws.commercetools.com' },
       { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: 's1.ticketm.net' },
     ],
