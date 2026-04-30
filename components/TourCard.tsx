@@ -22,7 +22,7 @@ function SyncBadge({ status }: { status: TourProduct['syncStatus'] }) {
   };
   const label = { synced: '✓ Synced', pending: '⏳ Pending', error: '✗ Error' };
   return (
-    <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${map[status]}`}>
+    <span className={`text-xs font-medium text-white px-2 py-0.5 rounded-full border ${map[status]}`}>
       {label[status]}
     </span>
   );
