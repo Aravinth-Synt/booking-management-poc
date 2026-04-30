@@ -5,15 +5,29 @@ declare global {
   var _redis: Redis | undefined;
 }
 
+function getRedisUrl(): string {
+  return process.env.REDIS_URL?.trim() ?? '';
+}
+
+export function isRedisEnabled(): boolean {
+  return Boolean(getRedisUrl());
+}
+
 export default function getRedisClient(): Redis {
+  const redisUrl = getRedisUrl();
+
+  if (!redisUrl) {
+    throw new Error('Redis is not configured. Set REDIS_URL to enable cache and booking locks.');
+  }
+
   if (global._redis) return global._redis;
 
-  const client = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', {
+  const client = new Redis(redisUrl, {
     retryStrategy: (times) => Math.min(times * 200, 5000),
-    maxRetriesPerRequest: 1,   // fail after 1 retry — no long waits per command
-    enableOfflineQueue: false, // reject immediately when not connected
+    maxRetriesPerRequest: 1,
+    enableOfflineQueue: false,
     enableReadyCheck: false,
-    connectTimeout: 500,
+    connectTimeout: 1000,
     lazyConnect: true,
   });
 
@@ -26,6 +40,8 @@ export default function getRedisClient(): Redis {
 }
 
 export async function pingRedis(): Promise<boolean> {
+  if (!isRedisEnabled()) return false;
+
   try {
     const client = getRedisClient();
     const result = await client.ping();

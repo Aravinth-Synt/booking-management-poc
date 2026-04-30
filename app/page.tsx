@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
+import HomeShowcase from '@/components/HomeShowcase';
 import ProductExplorer from '@/components/ProductExplorer';
 
 const STATS = [
   { label: 'Room Types', value: '5' },
   { label: 'Location', value: 'Central London' },
   { label: 'Concierge', value: '24/7' },
-  { label: 'From', value: '£95/night' },
+  { label: 'From', value: 'GBP 95/night' },
 ];
 
 export default function HomePage() {
@@ -19,7 +20,10 @@ export default function HomePage() {
         <div className="absolute inset-0">
           <div
             className="absolute inset-0 bg-cover bg-center"
-            style={{ backgroundImage: "url('https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=1600&q=80')" }}
+            style={{
+              backgroundImage:
+                "url('https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=1600&q=80')",
+            }}
           />
           <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/35 to-black/70" />
         </div>
@@ -65,23 +69,26 @@ export default function HomePage() {
       {/* ── Stats ──
       <section className="bg-forest-500 py-6">
         <div className="max-w-5xl mx-auto px-4 grid grid-cols-2 sm:grid-cols-4 gap-6 text-center">
-          {STATS.map((s) => (
-            <div key={s.label}>
-              <p className="text-gold-400 font-display text-2xl font-semibold">{s.value}</p>
-              <p className="text-white/60 text-xs tracking-wider uppercase mt-0.5">{s.label}</p>
+          {STATS.map((stat) => (
+            <div key={stat.label}>
+              <p className="text-gold-400 font-display text-2xl font-semibold">{stat.value}</p>
+              <p className="text-white/60 text-xs tracking-wider uppercase mt-0.5">{stat.label}</p>
             </div>
           ))}
         </div>
       </section> */}
 
       {/* ── Product Explorer ── */}
-      <ProductExplorer />
+      <HomeShowcase />
 
       {/* ── Footer ── */}
 
       <footer className="border-t border-ivory-200 py-10 text-center text-sm text-gray-400">
         <p className="font-display text-lg text-gray-700 mb-1">LondonStay POC</p>
-        <p className="text-xs">Powered by <span className="text-forest-500 font-medium">commercetools</span> × <span className="text-gold-600 font-medium">Redis</span> · Next.js 14</p>
+        <p className="text-xs">
+          Powered by <span className="text-forest-500 font-medium">commercetools</span> x{' '}
+          <span className="text-gold-600 font-medium">Redis</span> · Next.js 14
+        </p>
       </footer>
     </div>
   );
