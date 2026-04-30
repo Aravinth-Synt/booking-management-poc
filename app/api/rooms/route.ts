@@ -3,12 +3,15 @@ import { getRooms, searchRooms } from '@/lib/commercetools/products';
 import { getRoomLockStatus } from '@/lib/redis/roomLock';
 import { MOCK_ROOMS } from '@/data/mockRooms';
 import type { RoomProduct } from '@/types';
+import { isEffectivelyLocked } from '@/types';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const q = searchParams.get('q')?.trim() ?? '';
-  const limit = Number(searchParams.get('limit') ?? '20');
-  const offset = Number(searchParams.get('offset') ?? '0');
+  const q        = searchParams.get('q')?.trim() ?? '';
+  const limit    = Number(searchParams.get('limit') ?? '20');
+  const offset   = Number(searchParams.get('offset') ?? '0');
+  const checkIn  = searchParams.get('checkIn')  ?? undefined;
+  const checkOut = searchParams.get('checkOut') ?? undefined;
   let rooms: RoomProduct[];
   let source: 'ct' | 'mock' = 'ct';
   let error: string | null = null;
@@ -29,12 +32,14 @@ export async function GET(request: NextRequest) {
   const withLocks = await Promise.all(
     rooms.map(async (room) => {
       try {
-        const lockStatus = await getRoomLockStatus(room.id);
+        const lockStatus = await getRoomLockStatus(room.id, checkIn, checkOut);
+        const effectiveLock = lockStatus.status === 'locked' && isEffectivelyLocked(lockStatus.dateConflict);
         return {
           ...room,
-          lockStatus: lockStatus.status === 'locked' ? 'locked' : 'available',
+          lockStatus: effectiveLock ? 'locked' : 'available',
           lockedUntil: lockStatus.lock?.expiresAt,
           lockedBySession: lockStatus.lock?.sessionId,
+          dateConflict: lockStatus.dateConflict,
         } as RoomProduct;
       } catch {
         return room;
@@ -42,8 +47,5 @@ export async function GET(request: NextRequest) {
     })
   );
 
-  // Hide rooms that are currently locked (in another user's checkout)
-  const visibleRooms = withLocks.filter((r) => r.lockStatus !== 'locked');
-
-  return NextResponse.json({ rooms: visibleRooms, source, error, query: q, limit, offset, total: visibleRooms.length });
+  return NextResponse.json({ rooms: withLocks, source, error, query: q, limit, offset, total: withLocks.length });
 }

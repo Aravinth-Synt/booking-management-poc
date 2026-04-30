@@ -5,6 +5,14 @@ const LOCK_TTL = 600; // 10 minutes
 const LOCK_KEY = (roomId: string) => `room:lock:${roomId}`;
 const CONFIRMED_KEY = (roomId: string) => `room:confirmed:${roomId}`;
 
+function datesOverlap(aIn: string, aOut: string, bIn: string, bOut: string): boolean {
+  const aStart = new Date(aIn).getTime();
+  const aEnd   = new Date(aOut).getTime();
+  const bStart = new Date(bIn).getTime();
+  const bEnd   = new Date(bOut).getTime();
+  return aStart < bEnd && bStart < aEnd;
+}
+
 function makeLock(roomId: string, sessionId: string, checkIn?: string, checkOut?: string, guestName?: string): RoomLock {
   return {
     roomId,
@@ -69,7 +77,11 @@ export async function releaseRoomLock(roomId: string, sessionId: string): Promis
   }
 }
 
-export async function getRoomLockStatus(roomId: string): Promise<LockStatusResponse> {
+export async function getRoomLockStatus(
+  roomId: string,
+  checkIn?: string,
+  checkOut?: string,
+): Promise<LockStatusResponse> {
   try {
     const redis = getRedisClient();
     const raw   = await redis.get(LOCK_KEY(roomId));
@@ -79,7 +91,14 @@ export async function getRoomLockStatus(roomId: string): Promise<LockStatusRespo
     const lock: RoomLock = JSON.parse(raw);
     const secondsRemaining = Math.max(0, Math.floor((new Date(lock.expiresAt).getTime() - Date.now()) / 1000));
 
-    return { status: 'locked', lock, secondsRemaining };
+    // If caller provided dates and the lock has dates, check for overlap.
+    // dateConflict === false means the lock is for different dates — room is still bookable.
+    let dateConflict: boolean | undefined;
+    if (checkIn && checkOut && lock.checkIn && lock.checkOut) {
+      dateConflict = datesOverlap(checkIn, checkOut, lock.checkIn, lock.checkOut);
+    }
+
+    return { status: 'locked', lock, secondsRemaining, dateConflict };
   } catch {
     return { status: 'available' }; // Redis unavailable — treat as available
   }

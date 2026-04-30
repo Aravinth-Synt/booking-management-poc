@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import RoomStatusBadge from './RoomStatusBadge';
 import type { RoomProduct } from '@/types';
+import { isEffectivelyLocked } from '@/types';
 
 const FALLBACK = 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&q=80';
 const MAX_AMENITY_PILLS = 4;
@@ -17,11 +18,17 @@ const CATEGORY_STYLE: Record<string, string> = {
 interface RoomCardProps {
   room: RoomProduct;
   delay?: number;
+  checkIn?: string;
+  checkOut?: string;
 }
 
-export default function RoomCard({ room, delay = 0 }: RoomCardProps) {
-  const isLocked = room.lockStatus === 'locked';
-  const isBooked = room.status === 'booked';
+export default function RoomCard({ room, delay = 0, checkIn, checkOut }: RoomCardProps) {
+  const isLocked      = room.lockStatus === 'locked';
+  const isBooked      = room.status === 'booked';
+  const isUnavailable = isLocked && isEffectivelyLocked(room.dateConflict);
+  const roomHref      = checkIn && checkOut
+    ? `/rooms/${room.id}?checkIn=${checkIn}&checkOut=${checkOut}`
+    : `/rooms/${room.id}`;
   const visibleAmenities = room.amenities.slice(0, MAX_AMENITY_PILLS);
   const extraCount = room.amenities.length - MAX_AMENITY_PILLS;
 
@@ -87,13 +94,16 @@ export default function RoomCard({ room, delay = 0 }: RoomCardProps) {
             <span className="text-xs px-4 py-2 bg-gray-100 text-gray-400 border border-gray-200 font-medium">
               Unavailable
             </span>
-          ) : isLocked ? (
-            <span className="text-xs px-4 py-2 bg-crimson-50 text-crimson-500 border border-crimson-200 font-medium cursor-not-allowed">
-              Reserved
+          ) : isUnavailable ? (
+            <span
+              title={room.dateConflict === true ? 'Room is being checked out for your selected dates' : 'Checkout in progress'}
+              className="text-xs px-4 py-2 bg-crimson-50 text-crimson-600 border border-crimson-200 font-medium cursor-not-allowed"
+            >
+              {room.dateConflict === true ? 'Not Available' : 'Checkout in Progress'}
             </span>
           ) : (
             <Link
-              href={`/rooms/${room.id}`}
+              href={roomHref}
               className="text-xs px-4 py-2 bg-forest-500 hover:bg-forest-600 text-white font-medium tracking-wider uppercase transition-colors"
             >
               View Room →

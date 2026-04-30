@@ -22,6 +22,7 @@ export interface RoomProduct {
   lockStatus?: LockStatus;
   lockedUntil?: string;
   lockedBySession?: string;
+  dateConflict?: boolean;
 }
 
 export interface RoomLock {
@@ -77,6 +78,12 @@ export interface LockStatusResponse {
   status: LockStatus | 'available';
   lock?: RoomLock;
   secondsRemaining?: number;
+  dateConflict?: boolean;
+}
+
+/** true/undefined = locked for these dates; false = lock is for different dates */
+export function isEffectivelyLocked(dateConflict: boolean | undefined): boolean {
+  return dateConflict !== false;
 }
 
 // ─── commercetools Types ───────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ const nextConfig = {
       { protocol: 'https', hostname: 'images.us-east-2.aws.commercetools.com' },
       { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: 's1.ticketm.net' },
+       { protocol: 'https', hostname: 'images.us-east-2.aws.commercetools.com' },
     ],
   },
 };

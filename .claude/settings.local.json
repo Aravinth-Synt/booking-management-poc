@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s http://localhost:3000/api/rooms)",
+      "Bash(python3 -c \"import json,sys; rooms=json.load\\(sys.stdin\\)['rooms']; [print\\(r['id'], r['name']\\) for r in rooms[:3]]\")",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const r=JSON.parse\\(d\\).rooms; r.slice\\(0,3\\).forEach\\(x=>console.log\\(x.id, '|', x.name\\)\\)\")"
+    ]
+  }
+}

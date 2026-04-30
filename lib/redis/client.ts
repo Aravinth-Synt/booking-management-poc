@@ -1,51 +1,54 @@
 import Redis from 'ioredis';
+import { memoryStore } from './memoryStore';
 
 declare global {
   // eslint-disable-next-line no-var
-  var _redis: Redis | undefined;
-}
-
-function getRedisUrl(): string {
-  return process.env.REDIS_URL?.trim() ?? '';
+  var _redisStore: Redis | typeof memoryStore | undefined;
 }
 
 export function isRedisEnabled(): boolean {
-  return Boolean(getRedisUrl());
+  return Boolean(process.env.REDIS_URL?.trim());
+}
+
+function createClient(): typeof memoryStore | Redis {
+  if (global._redisStore) return global._redisStore;
+
+  // Default to memory store — works with no Redis server (dev / demo mode)
+  global._redisStore = memoryStore;
+
+  if (!isRedisEnabled()) return global._redisStore;
+
+  const client = new Redis(process.env.REDIS_URL!, {
+    retryStrategy:       () => null,
+    maxRetriesPerRequest: 0,
+    enableOfflineQueue:  false,
+    enableReadyCheck:    false,
+    connectTimeout:      800,
+  });
+
+  client.on('ready', () => {
+    console.log('[Redis] connected');
+    global._redisStore = client;
+  });
+
+  client.on('error', () => {
+    if (global._redisStore !== memoryStore) {
+      console.warn('[Redis] unavailable — falling back to in-memory store');
+      global._redisStore = memoryStore;
+    }
+  });
+
+  return global._redisStore;
 }
 
 export default function getRedisClient(): Redis {
-  const redisUrl = getRedisUrl();
-
-  if (!redisUrl) {
-    throw new Error('Redis is not configured. Set REDIS_URL to enable cache and booking locks.');
-  }
-
-  if (global._redis) return global._redis;
-
-  const client = new Redis(redisUrl, {
-    retryStrategy: (times) => Math.min(times * 200, 5000),
-    maxRetriesPerRequest: 1,
-    enableOfflineQueue: false,
-    enableReadyCheck: false,
-    connectTimeout: 1000,
-    lazyConnect: true,
-  });
-
-  client.on('error', (err) => {
-    console.warn('[Redis] connection error:', err.message);
-  });
-
-  global._redis = client;
-  return client;
+  return (global._redisStore ?? createClient()) as unknown as Redis;
 }
 
 export async function pingRedis(): Promise<boolean> {
   if (!isRedisEnabled()) return false;
-
   try {
-    const client = getRedisClient();
-    const result = await client.ping();
-    return result === 'PONG';
+    return (await getRedisClient().ping()) === 'PONG';
   } catch {
     return false;
   }

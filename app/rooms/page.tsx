@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Navbar from '@/components/Navbar';
 import RoomCard from '@/components/RoomCard';
 import type { RoomProduct, RoomCategory, RoomAmenity, LockStatusResponse } from '@/types';
+import { isEffectivelyLocked } from '@/types';
 import { MOCK_ROOMS } from '@/data/mockRooms';
 
 const CATEGORY_ORDER: RoomCategory[] = ['LUXURY', 'MODERATE', 'BUDGET'];
@@ -29,22 +30,35 @@ function SkeletonCard() {
   );
 }
 
+const TODAY    = new Date().toISOString().split('T')[0];
+const TOMORROW = new Date(Date.now() + 86_400_000).toISOString().split('T')[0];
+
 export default function RoomsPage() {
   const [rooms, setRooms] = useState<RoomProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState<'ct' | 'mock'>('mock');
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
+  const [checkIn, setCheckIn]   = useState('');
+  const [checkOut, setCheckOut] = useState('');
   const [category, setCategory] = useState<RoomCategory | 'ALL'>('ALL');
   const [amenity, setAmenity] = useState<RoomAmenity | 'ALL'>('ALL');
-  const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const pollRef  = useRef<NodeJS.Timeout | null>(null);
+  const datesRef = useRef<{ checkIn: string; checkOut: string } | undefined>();
 
-  async function fetchRooms(search = '') {
+  // Keep datesRef current so the polling interval always uses the latest dates
+  // without needing to be recreated every time dates change.
+  useEffect(() => {
+    datesRef.current = checkIn && checkOut ? { checkIn, checkOut } : undefined;
+  }, [checkIn, checkOut]);
+
+  async function fetchRooms(search = '', dates?: { checkIn: string; checkOut: string }) {
     try {
-      const searchParams = new URLSearchParams();
-      if (search.trim()) searchParams.set('q', search.trim());
-      const path = searchParams.size > 0 ? `/api/rooms?${searchParams.toString()}` : '/api/rooms';
-      const res = await fetch(path);
+      const qs = new URLSearchParams();
+      if (search.trim())  qs.set('q',        search.trim());
+      if (dates?.checkIn)  qs.set('checkIn',  dates.checkIn);
+      if (dates?.checkOut) qs.set('checkOut', dates.checkOut);
+      const res  = await fetch(qs.size > 0 ? `/api/rooms?${qs}` : '/api/rooms');
       const data = await res.json();
       setRooms(data.rooms ?? MOCK_ROOMS);
       setSource(data.source ?? 'mock');
@@ -59,32 +73,42 @@ export default function RoomsPage() {
   }
 
   async function refreshLockStatuses(currentRooms: RoomProduct[]) {
+    const dates = datesRef.current;
+    // Build the date query string once for all rooms in this poll cycle
+    const qs = dates ? `?checkIn=${dates.checkIn}&checkOut=${dates.checkOut}` : '';
     const updated = await Promise.all(
       currentRooms.map(async (room) => {
         try {
-          const res = await fetch(`/api/booking/status/${room.id}`);
-          const lockData: LockStatusResponse = await res.json();
+          const lockData: LockStatusResponse = await fetch(
+            `/api/booking/status/${room.id}${qs}`
+          ).then((r) => r.json());
+          const locked = lockData.status === 'locked' && isEffectivelyLocked(lockData.dateConflict);
           return {
             ...room,
-            lockStatus: lockData.status === 'locked' ? ('locked' as const) : ('available' as const),
-            lockedUntil: lockData.lock?.expiresAt,
+            lockStatus:   locked ? ('locked' as const) : ('available' as const),
+            lockedUntil:  lockData.lock?.expiresAt,
+            dateConflict: lockData.dateConflict,
           };
         } catch {
           return room;
         }
       })
     );
-    setRooms(updated);
+    // Skip re-render if lock statuses haven't changed
+    const changed = updated.some(
+      (r, i) => r.lockStatus !== currentRooms[i].lockStatus || r.dateConflict !== currentRooms[i].dateConflict
+    );
+    if (changed) setRooms(updated);
   }
 
   useEffect(() => {
     const timeout = setTimeout(() => {
       setLoading(true);
-      fetchRooms(query);
+      fetchRooms(query, datesRef.current);
     }, 250);
-
     return () => clearTimeout(timeout);
-  }, [query]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, checkIn, checkOut]);
 
   useEffect(() => {
     if (rooms.length === 0) return;
@@ -141,18 +165,45 @@ export default function RoomsPage() {
           <div className="gold-divider w-16 mt-4" />
         </div>
 
-        <div className="mb-8">
-          <label htmlFor="room-search" className="sr-only">
-            Search rooms
-          </label>
-          <input
-            id="room-search"
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search rooms, amenities, or room numbers"
-            className="w-full max-w-md border border-ivory-200 bg-white px-4 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-300"
-          />
+        <div className="mb-8 flex flex-col sm:flex-row gap-3 flex-wrap">
+          <div className="flex-1 min-w-[200px]">
+            <label htmlFor="room-search" className="sr-only">Search rooms</label>
+            <input
+              id="room-search"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search rooms, amenities, or room numbers"
+              className="w-full border border-ivory-200 bg-white px-4 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-300"
+            />
+          </div>
+          <div className="flex gap-3 flex-wrap">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="check-in" className="text-xs text-gray-400 tracking-wider uppercase">Check-in</label>
+              <input
+                id="check-in"
+                type="date"
+                value={checkIn}
+                min={TODAY}
+                onChange={(e) => {
+                  setCheckIn(e.target.value);
+                  if (checkOut && e.target.value >= checkOut) setCheckOut('');
+                }}
+                className="border border-ivory-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-300"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="check-out" className="text-xs text-gray-400 tracking-wider uppercase">Check-out</label>
+              <input
+                id="check-out"
+                type="date"
+                value={checkOut}
+                min={checkIn || TOMORROW}
+                onChange={(e) => setCheckOut(e.target.value)}
+                className="border border-ivory-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-300"
+              />
+            </div>
+          </div>
         </div>
 
         {/* Filters */}
@@ -204,7 +255,7 @@ export default function RoomsPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {filtered.map((room, i) => (
-              <RoomCard key={room.id} room={room} delay={i * 0.07} />
+              <RoomCard key={room.id} room={room} delay={i * 0.07} checkIn={checkIn} checkOut={checkOut} />
             ))}
           </div>
         )}

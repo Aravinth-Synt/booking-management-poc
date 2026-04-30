@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Navbar from '@/components/Navbar';
 import RoomStatusBadge from '@/components/RoomStatusBadge';
@@ -40,11 +40,12 @@ function tomorrowStr() {
 export default function RoomDetailPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
 
   const [room, setRoom] = useState<RoomProduct | null>(null);
   const [lockStatus, setLockStatus] = useState<LockStatusResponse>({ status: 'available' });
-  const [checkIn, setCheckIn] = useState(todayStr());
-  const [checkOut, setCheckOut] = useState(tomorrowStr());
+  const [checkIn, setCheckIn] = useState(() => searchParams.get('checkIn') || todayStr());
+  const [checkOut, setCheckOut] = useState(() => searchParams.get('checkOut') || tomorrowStr());
   const [guests, setGuests] = useState(1);
   const [reserving, setReserving] = useState(false);
   const [mySessionId] = useState(() => getOrCreateSessionId());

@@ -1,0 +1,483 @@
+{
+    "rooms": [
+        {
+            "id": "175ad937-1029-4028-8b9c-dfe9e95e6f25",
+            "ctKey": "room-lux-001",
+            "name": "The Ritz London",
+            "description": "Deluxe King Room",
+            "category": "LUXURY",
+            "amenity": "AC",
+            "floor": 10,
+            "roomNumber": "101",
+            "pricePerNight": 850,
+            "maxGuests": 2,
+            "images": [
+                "https://images.unsplash.com/photo-1566665797739-1674de7a421a"
+            ],
+            "amenities": [
+                "AC",
+                "WiFi",
+                "Smart TV",
+                "Mini Bar",
+                "City View",
+                "King Bed"
+            ],
+            "status": "available",
+            "lockStatus": "available"
+        },
+        {
+            "id": "d90f5a7d-625f-4232-8377-66148167b002",
+            "ctKey": "room-lux-002",
+            "name": "The Savoy",
+            "description": "Executive Suite",
+            "category": "LUXURY",
+            "amenity": "AC",
+            "floor": 11,
+            "roomNumber": "1101",
+            "pricePerNight": 1200,
+            "maxGuests": 4,
+            "images": [
+                "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa"
+            ],
+            "amenities": [
+                "AC",
+                "WiFi",
+                "Living Area",
+                "Mini Bar",
+                "Lounge Access",
+                "King Bed"
+            ],
+            "status": "available",
+            "lockStatus": "available"
+        },
+        {
+            "id": "1a8663b1-82b5-43a9-b785-c2a1e5d10d38",
+            "ctKey": "room-mod-001",
+            "name": "Hilton London Bankside",
+            "description": "Superior Queen Room",
+            "category": "MODERATE",
+            "amenity": "AC",
+            "floor": 4,
+            "roomNumber": "402",
+            "pricePerNight": 420,
+            "maxGuests": 2,
+            "images": [
+                "https://images.unsplash.com/photo-1590490360182-c33d57733427"
+            ],
+            "amenities": [
+                "AC",
+                "WiFi",
+                "TV",
+                "Work Desk",
+                "Queen Bed"
+            ],
+            "status": "available",
+            "lockStatus": "available"
+        },
+        {
+            "id": "6270e2d5-22c4-4dd7-a629-a7fd39eb7a3a",
+            "ctKey": "room-mod-002",
+            "name": "Novotel London Tower Bridge",
+            "description": "Deluxe Twin Room",
+            "category": "MODERATE",
+            "amenity": "AC",
+            "floor": 3,
+            "roomNumber": "305",
+            "pricePerNight": 380,
+            "maxGuests": 2,
+            "images": [
+                "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b"
+            ],
+            "amenities": [
+                "AC",
+                "WiFi",
+                "TV",
+                "Twin Beds",
+                "Air Conditioning"
+            ],
+            "status": "available",
+            "lockStatus": "available"
+        },
+        {
+            "id": "59c83bd6-22f5-43e8-aabf-f62202f16f11",
+            "ctKey": "room-std-001",
+            "name": "Holiday Inn London Bloomsbury",
+            "description": "Standard Double Room",
+            "category": "BUDGET",
+            "amenity": "AC",
+            "floor": 2,
+            "roomNumber": "203",
+            "pricePerNight": 220,
+            "maxGuests": 2,
+            "images": [
+                "https://images.unsplash.com/photo-1505691938895-1758d7feb511"
+            ],
+            "amenities": [
+                "AC",
+                "WiFi",
+                "TV",
+                "Double Bed"
+            ],
+            "status": "available",
+            "lockStatus": "available"
+        },
+        {
+            "id": "517c9ab1-c85f-40a6-bf8f-122bce94419d",
+            "ctKey": "room-std-002",
+            "name": "Ibis London City Shoreditch",
+            "description": "Classic Room",
+            "category": "BUDGET",
+            "amenity": "NON_AC",
+            "floor": 1,
+            "roomNumber": "105",
+            "pricePerNight": 180,
+            "maxGuests": 1,
+            "images": [
+                "https://images.unsplash.com/photo-1578898887932-dce23a595ad4"
+            ],
+            "amenities": [
+                "Natural Ventilation",
+                "WiFi",
+                "TV",
+                "Single Bed"
+            ],
+            "status": "available",
+            "lockStatus": "available"
+        },
+        {
+            "id": "f2b37559-ef63-4413-8330-4697436fe857",
+            "ctKey": "room-std-003",
+            "name": "Travelodge London Central",
+            "description": "Economy Twin Room",
+            "category": "BUDGET",
+            "amenity": "NON_AC",
+            "floor": 1,
+            "roomNumber": "110",
+            "pricePerNight": 150,
+            "maxGuests": 2,
+            "images": [
+                "https://images.unsplash.com/photo-1560067174-8946b1c5c8f3"
+            ],
+            "amenities": [
+                "Natural Ventilation",
+                "WiFi",
+                "Twin Beds"
+            ],
+            "status": "available",
+            "lockStatus": "available"
+        },
+        {
+            "id": "0ba41f86-6639-4ab9-bcc3-5a8e34f21502",
+            "ctKey": "room-lux-003",
+            "name": "ME London",
+            "description": "Penthouse Suite",
+            "category": "LUXURY",
+            "amenity": "AC",
+            "floor": 15,
+            "roomNumber": "1501",
+            "pricePerNight": 1800,
+            "maxGuests": 4,
+            "images": [
+                "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb"
+            ],
+            "amenities": [
+                "AC",
+                "WiFi",
+                "Private Terrace",
+                "City View",
+                "King Bed",
+                "Mini Bar"
+            ],
+            "status": "available",
+            "lockStatus": "available"
+        },
+        {
+            "id": "ee533a52-d04b-4d58-a7cc-8e98ad665a6e",
+            "ctKey": "room-lux-004",
+            "name": "Corinthia London",
+            "description": "Honeymoon Suite",
+            "category": "LUXURY",
+            "amenity": "AC",
+            "floor": 12,
+            "roomNumber": "1202",
+            "pricePerNight": 1400,
+            "maxGuests": 2,
+            "images": [
+                "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267"
+            ],
+            "amenities": [
+                "AC",
+                "WiFi",
+                "Jacuzzi",
+                "Balcony",
+                "King Bed"
+            ],
+            "status": "available",
+            "lockStatus": "available"
+        },
+        {
+            "id": "5caca223-a106-4a11-adc4-d129cc042dd5",
+            "ctKey": "room-mod-004",
+            "name": "Staybridge Suites London Vauxhall",
+            "description": "Studio Room",
+            "category": "MODERATE",
+            "amenity": "AC",
+            "floor": 3,
+            "roomNumber": "302",
+            "pricePerNight": 360,
+            "maxGuests": 2,
+            "images": [
+                "https://images.unsplash.com/photo-1554995207-c18c203602cb"
+            ],
+            "amenities": [
+                "AC",
+                "WiFi",
+                "Kitchenette",
+                "TV",
+                "Queen Bed"
+            ],
+            "status": "available",
+            "lockStatus": "available"
+        },
+        {
+            "id": "fc496853-a6ca-4706-8a59-7294b3638b03",
+            "ctKey": "room-mod-005",
+            "name": "The Langham London",
+            "description": "City View Room",
+            "category": "MODERATE",
+            "amenity": "AC",
+            "floor": 7,
+            "roomNumber": "702",
+            "pricePerNight": 600,
+            "maxGuests": 2,
+            "images": [
+                "https://images.unsplash.com/photo-1566665797739-1674de7a421a"
+            ],
+            "amenities": [
+                "AC",
+                "WiFi",
+                "City View",
+                "Smart TV"
+            ],
+            "status": "available",
+            "lockStatus": "available"
+        },
+        {
+            "id": "ab9ec54b-d0df-4dd9-ac2d-e633a5e546bc",
+            "ctKey": "room-std-004",
+            "name": "Hampton by Hilton London Waterloo",
+            "description": "Accessible Room",
+            "category": "BUDGET",
+            "amenity": "AC",
+            "floor": 1,
+            "roomNumber": "108",
+            "pricePerNight": 200,
+            "maxGuests": 2,
+            "images": [
+                "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b"
+            ],
+            "amenities": [
+                "AC",
+                "WiFi",
+                "Accessible Features",
+                "TV"
+            ],
+            "status": "available",
+            "lockStatus": "available"
+        },
+        {
+            "id": "b38a0885-6ea5-4bf6-b99a-ce9e8b1469fa",
+            "ctKey": "room-lux-005",
+            "name": "Shangri-La The Shard London",
+            "description": "Luxury King Suite",
+            "category": "LUXURY",
+            "amenity": "AC",
+            "floor": 32,
+            "roomNumber": "3201",
+            "pricePerNight": 2000,
+            "maxGuests": 3,
+            "images": [
+                "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa"
+            ],
+            "amenities": [
+                "AC",
+                "WiFi",
+                "City View",
+                "Mini Bar",
+                "King Bed"
+            ],
+            "status": "available",
+            "lockStatus": "available"
+        },
+        {
+            "id": "88120878-fc83-4265-ad8e-8f408c1eb187",
+            "ctKey": "room-mod-006",
+            "name": "Radisson Blu Edwardian Mercer Street",
+            "description": "Superior King Room",
+            "category": "MODERATE",
+            "amenity": "AC",
+            "floor": 4,
+            "roomNumber": "405",
+            "pricePerNight": 480,
+            "maxGuests": 2,
+            "images": [
+                "https://images.unsplash.com/photo-1590490360182-c33d57733427"
+            ],
+            "amenities": [
+                "AC",
+                "WiFi",
+                "Smart TV",
+                "King Bed"
+            ],
+            "status": "available",
+            "lockStatus": "available"
+        },
+        {
+            "id": "4e20ecaf-5082-4ecc-8d09-6a96d39737d5",
+            "ctKey": "room-std-005",
+            "name": "Premier Inn London City",
+            "description": "Standard Twin Room",
+            "category": "BUDGET",
+            "amenity": "AC",
+            "floor": 2,
+            "roomNumber": "210",
+            "pricePerNight": 130,
+            "maxGuests": 2,
+            "images": [
+                "https://images.unsplash.com/photo-1566073771259-6a8506099945"
+            ],
+            "amenities": [
+                "AC",
+                "WiFi",
+                "Twin Beds",
+                "TV"
+            ],
+            "status": "available",
+            "lockStatus": "available"
+        },
+        {
+            "id": "248298a1-fb02-4821-8133-41f8024a43a4",
+            "ctKey": "room-lux-006",
+            "name": "The Dorchester",
+            "description": "Garden View Suite",
+            "category": "LUXURY",
+            "amenity": "AC",
+            "floor": 9,
+            "roomNumber": "901",
+            "pricePerNight": 1600,
+            "maxGuests": 3,
+            "images": [
+                "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b"
+            ],
+            "amenities": [
+                "AC",
+                "WiFi",
+                "Garden View",
+                "Mini Bar",
+                "King Bed"
+            ],
+            "status": "available",
+            "lockStatus": "available"
+        },
+        {
+            "id": "24267536-9aa6-4316-bbda-64679eaee768",
+            "ctKey": "room-mod-007",
+            "name": "Park Plaza Westminster Bridge",
+            "description": "Family Suite",
+            "category": "MODERATE",
+            "amenity": "AC",
+            "floor": 5,
+            "roomNumber": "510",
+            "pricePerNight": 500,
+            "maxGuests": 4,
+            "images": [
+                "https://images.unsplash.com/photo-1554995207-c18c203602cb"
+            ],
+            "amenities": [
+                "AC",
+                "WiFi",
+                "Sofa Bed",
+                "TV",
+                "City View"
+            ],
+            "status": "available",
+            "lockStatus": "available"
+        },
+        {
+            "id": "7e982879-2c4b-40c2-905c-050e13dc4c6d",
+            "ctKey": "room-std-006",
+            "name": "easyHotel London Victoria",
+            "description": "Compact Double Room",
+            "category": "BUDGET",
+            "amenity": "NON_AC",
+            "floor": 1,
+            "roomNumber": "115",
+            "pricePerNight": 90,
+            "maxGuests": 2,
+            "images": [
+                "https://images.unsplash.com/photo-1555854877-bab0e564b8d5"
+            ],
+            "amenities": [
+                "Natural Ventilation",
+                "WiFi",
+                "Double Bed"
+            ],
+            "status": "available",
+            "lockStatus": "available"
+        },
+        {
+            "id": "0f516bdb-9321-4570-9d17-c8f4e7a8928c",
+            "ctKey": "room-lux-007",
+            "name": "InterContinental London Park Lane",
+            "description": "Junior Suite",
+            "category": "LUXURY",
+            "amenity": "AC",
+            "floor": 8,
+            "roomNumber": "801",
+            "pricePerNight": 950,
+            "maxGuests": 3,
+            "images": [
+                "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb"
+            ],
+            "amenities": [
+                "AC",
+                "WiFi",
+                "Mini Bar",
+                "King Bed",
+                "City View"
+            ],
+            "status": "available",
+            "lockStatus": "available"
+        },
+        {
+            "id": "8171136c-3318-4cbe-8bac-74c2c217db5f",
+            "ctKey": "room-mod-008",
+            "name": "Crowne Plaza London Docklands",
+            "description": "Executive Double Room",
+            "category": "MODERATE",
+            "amenity": "AC",
+            "floor": 6,
+            "roomNumber": "602",
+            "pricePerNight": 350,
+            "maxGuests": 2,
+            "images": [
+                "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2"
+            ],
+            "amenities": [
+                "AC",
+                "WiFi",
+                "Work Desk",
+                "TV",
+                "Queen Bed"
+            ],
+            "status": "available",
+            "lockStatus": "available"
+        }
+    ],
+    "source": "ct",
+    "error": null,
+    "query": "",
+    "limit": 20,
+    "offset": 0,
+    "total": 20
+}
