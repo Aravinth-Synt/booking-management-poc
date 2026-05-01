@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Navbar from '@/components/Navbar';
@@ -31,46 +31,61 @@ function calculateNights(checkIn: string, checkOut: string): number {
   return Math.max(0, Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86_400_000));
 }
 
-function todayStr() { return new Date().toISOString().split('T')[0]; }
+function todayStr()    { return new Date().toISOString().split('T')[0]; }
 function tomorrowStr() {
   const d = new Date(); d.setDate(d.getDate() + 1);
   return d.toISOString().split('T')[0];
 }
 
 export default function RoomDetailPage() {
-  const router = useRouter();
-  const { id } = useParams<{ id: string }>();
+  const router       = useRouter();
+  const { id }       = useParams<{ id: string }>();
   const searchParams = useSearchParams();
 
-  const [room, setRoom] = useState<RoomProduct | null>(null);
+  const [room,       setRoom]       = useState<RoomProduct | null>(null);
   const [lockStatus, setLockStatus] = useState<LockStatusResponse>({ status: 'available' });
-  const [checkIn, setCheckIn] = useState(() => searchParams.get('checkIn') || todayStr());
-  const [checkOut, setCheckOut] = useState(() => searchParams.get('checkOut') || tomorrowStr());
-  const [guests, setGuests] = useState(1);
-  const [reserving, setReserving] = useState(false);
-  const [mySessionId] = useState(() => getOrCreateSessionId());
-  const [myLock, setMyLock] = useState<RoomLock | null>(null);
+  const [checkIn,    setCheckIn]    = useState(() => searchParams.get('checkIn')  || todayStr());
+  const [checkOut,   setCheckOut]   = useState(() => searchParams.get('checkOut') || tomorrowStr());
+  const [guests,     setGuests]     = useState(1);
+  const [reserving,  setReserving]  = useState(false);
+  const [mySessionId]               = useState(() => getOrCreateSessionId());
+  const [myLock,     setMyLock]     = useState<RoomLock | null>(null);
+
+  // Ref keeps current params available to the polling interval without recreating it
+  const statusParamsRef = useRef({ checkIn, checkOut, inventory: 5 });
+  useEffect(() => {
+    statusParamsRef.current = { checkIn, checkOut, inventory: room?.inventory ?? 5 };
+  }, [checkIn, checkOut, room]);
 
   const fetchRoom = useCallback(async () => {
     try {
-      const res = await fetch(`/api/rooms/${id}`);
+      const qs = new URLSearchParams();
+      if (checkIn)  qs.set('checkIn',  checkIn);
+      if (checkOut) qs.set('checkOut', checkOut);
+      const res  = await fetch(`/api/rooms/${id}?${qs}`);
       const data = await res.json();
       setRoom(data);
       setLockStatus({
-        status: data.lockStatus ?? 'available',
-        lock: data.lockStatus === 'locked'
+        status:          data.lockStatus ?? 'available',
+        lock:            data.lockStatus === 'locked'
           ? { roomId: id, sessionId: data.lockedBySession ?? '', lockedAt: '', expiresAt: data.lockedUntil ?? '' }
           : undefined,
         secondsRemaining: data.secondsRemaining,
+        slotsAvailable:   data.slotsAvailable,
+        slotsTotal:       data.slotsTotal,
       });
     } catch {
       setRoom(MOCK_ROOMS.find((r) => r.id === id) ?? MOCK_ROOMS[0]);
     }
-  }, [id]);
+  }, [id, checkIn, checkOut]);
 
   const pollLockStatus = useCallback(async () => {
     try {
-      const res = await fetch(`/api/booking/status/${id}`);
+      const { checkIn: ci, checkOut: co, inventory } = statusParamsRef.current;
+      const qs = new URLSearchParams({ inventory: String(inventory) });
+      if (ci) qs.set('checkIn',  ci);
+      if (co) qs.set('checkOut', co);
+      const res  = await fetch(`/api/booking/status/${id}?${qs}`);
       const data: LockStatusResponse = await res.json();
       setLockStatus(data);
     } catch {}
@@ -90,25 +105,40 @@ export default function RoomDetailPage() {
       const res = await fetch('/api/booking/reserve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomId: id, sessionId: mySessionId, checkIn, checkOut, guestName: '' }),
+        body: JSON.stringify({
+          roomId: id, sessionId: mySessionId, checkIn, checkOut,
+          guestName: '', inventory: room?.inventory ?? 5,
+        }),
       });
       const data = await res.json();
       if (res.ok) {
         setMyLock(data.lock);
-        const params = new URLSearchParams({ roomId: id, sessionId: mySessionId, checkIn, checkOut, guests: String(guests), expiresAt: data.expiresAt ?? '' });
+        const params = new URLSearchParams({
+          roomId: id, sessionId: mySessionId,
+          checkIn, checkOut, guests: String(guests),
+          expiresAt: data.expiresAt ?? '',
+        });
         router.push(`/cart?${params.toString()}`);
       } else if (res.status === 409) {
-        setLockStatus({ status: 'locked', lock: data.lock, secondsRemaining: data.secondsRemaining });
+        setLockStatus({
+          status:         'locked',
+          lock:           data.lock,
+          secondsRemaining: data.secondsRemaining,
+          slotsAvailable: 0,
+          slotsTotal:     data.inventory,
+        });
       }
     } finally {
       setReserving(false);
     }
   }
 
-  const nights = calculateNights(checkIn, checkOut);
-  const total = room ? room.pricePerNight * nights : 0;
-  const isLockedByMe = lockStatus.status === 'locked' && lockStatus.lock?.sessionId === mySessionId;
-  const isLockedByOther = lockStatus.status === 'locked' && !isLockedByMe;
+  const nights         = calculateNights(checkIn, checkOut);
+  const total          = room ? room.pricePerNight * nights : 0;
+  const hasSlotData    = lockStatus.slotsAvailable !== undefined;
+  const isFullyBooked  = hasSlotData && lockStatus.slotsAvailable === 0;
+  const isLockedByMe   = lockStatus.status === 'locked' && lockStatus.lock?.sessionId === mySessionId;
+  const isLockedByOther = isFullyBooked || (!hasSlotData && lockStatus.status === 'locked' && !isLockedByMe);
 
   if (!room) return (
     <div className="min-h-screen bg-ivory-50"><Navbar />
@@ -181,20 +211,30 @@ export default function RoomDetailPage() {
               </div>
             </div>
 
-            {/* Lock Status Panel */}
+            {/* Availability panel */}
             {isLockedByMe && myLock && (
               <div className="bg-forest-50 border border-forest-200 p-4">
                 <p className="text-sm font-semibold text-forest-700 mb-2">Your reservation is active</p>
                 <ReservationTimer expiresAt={myLock.expiresAt} onExpire={() => setMyLock(null)} />
               </div>
             )}
-            {isLockedByOther && lockStatus.lock && (
+            {isLockedByOther && !hasSlotData && lockStatus.lock && (
               <LockOverlay lock={lockStatus.lock} onRefresh={pollLockStatus} />
+            )}
+            {isFullyBooked && (
+              <div className="bg-crimson-50 border border-crimson-200 p-4 flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-crimson-500" />
+                <p className="text-sm text-crimson-700 font-medium">
+                  All {lockStatus.slotsTotal} rooms are reserved for your selected dates. Try different dates.
+                </p>
+              </div>
             )}
             {!isLockedByMe && !isLockedByOther && (
               <div className="bg-forest-50 border border-forest-200 p-4 flex items-center gap-3">
                 <div className="w-2 h-2 rounded-full bg-green-500" />
-                <p className="text-sm text-forest-700 font-medium">This room is available — reserve now to hold your place.</p>
+                <p className="text-sm text-forest-700 font-medium">
+                  This room is available — reserve now to hold your place.
+                </p>
               </div>
             )}
           </div>
@@ -210,6 +250,27 @@ export default function RoomDetailPage() {
             </div>
 
             <RoomStatusBadge status={lockStatus.status === 'locked' ? 'locked' : 'available'} secondsRemaining={lockStatus.secondsRemaining} />
+
+            {/* Slot availability indicator */}
+            {hasSlotData && (
+              <div className={`flex items-center gap-2 text-sm py-2 px-3 border ${
+                isFullyBooked
+                  ? 'bg-crimson-50 border-crimson-200 text-crimson-700'
+                  : lockStatus.slotsAvailable === 1
+                  ? 'bg-amber-50 border-amber-200 text-amber-700'
+                  : 'bg-forest-50 border-forest-200 text-forest-700'
+              }`}>
+                <div className={`w-2 h-2 rounded-full shrink-0 ${
+                  isFullyBooked ? 'bg-crimson-500' : lockStatus.slotsAvailable === 1 ? 'bg-amber-400' : 'bg-green-500'
+                }`} />
+                {isFullyBooked
+                  ? `Fully booked for these dates (${lockStatus.slotsTotal} rooms)`
+                  : lockStatus.slotsAvailable === 1
+                  ? 'Last room available!'
+                  : `${lockStatus.slotsAvailable} of ${lockStatus.slotsTotal} rooms available`
+                }
+              </div>
+            )}
 
             <div className="space-y-3">
               <div>
@@ -255,7 +316,7 @@ export default function RoomDetailPage() {
                   : 'bg-forest-500 hover:bg-forest-600 disabled:bg-forest-200 text-white'
               }`}
             >
-              {reserving ? 'Reserving…' : isLockedByOther ? 'Reserved — Check Back Soon' : 'Reserve This Room'}
+              {reserving ? 'Reserving…' : isLockedByOther ? 'Not Available for These Dates' : 'Reserve This Room'}
             </button>
 
             <p className="text-xs text-gray-400 text-center">

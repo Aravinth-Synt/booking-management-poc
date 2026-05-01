@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRoomById } from '@/lib/commercetools/products';
-import { getRoomLockStatus } from '@/lib/redis/roomLock';
+import { getSlotStatus } from '@/lib/redis/roomLock';
 import { MOCK_ROOMS } from '@/data/mockRooms';
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const { id } = params;
+  const { searchParams } = new URL(req.url);
+  const checkIn  = searchParams.get('checkIn')  ?? undefined;
+  const checkOut = searchParams.get('checkOut') ?? undefined;
 
   let room;
   try {
@@ -14,13 +17,16 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   }
 
   try {
-    const lockStatus = await getRoomLockStatus(id);
+    const inventory  = room.inventory ?? 5;
+    const slotStatus = await getSlotStatus(id, checkIn, checkOut, inventory);
     return NextResponse.json({
       ...room,
-      lockStatus: lockStatus.status,
-      lockedUntil: lockStatus.lock?.expiresAt,
-      lockedBySession: lockStatus.lock?.sessionId,
-      secondsRemaining: lockStatus.secondsRemaining,
+      lockStatus:      slotStatus.status,
+      lockedUntil:     slotStatus.lock?.expiresAt,
+      lockedBySession: slotStatus.lock?.sessionId,
+      secondsRemaining: slotStatus.secondsRemaining,
+      slotsAvailable:  slotStatus.slotsAvailable,
+      slotsTotal:      slotStatus.slotsTotal,
     });
   } catch {
     return NextResponse.json(room);

@@ -23,6 +23,9 @@ export interface RoomProduct {
   lockedUntil?: string;
   lockedBySession?: string;
   dateConflict?: boolean;
+  inventory?: number;
+  slotsAvailable?: number;
+  slotsTotal?: number;
 }
 
 export interface RoomLock {
@@ -79,6 +82,8 @@ export interface LockStatusResponse {
   lock?: RoomLock;
   secondsRemaining?: number;
   dateConflict?: boolean;
+  slotsAvailable?: number;
+  slotsTotal?: number;
 }
 
 /** true/undefined = locked for these dates; false = lock is for different dates */

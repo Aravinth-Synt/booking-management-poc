@@ -15,7 +15,7 @@ import type {
   TourProduct,
 } from '@/types';
 
-const ROOM_PRODUCT_TYPE_ID = process.env.CT_PRODUCT_TYPE_ID ?? '';
+const ROOM_PRODUCT_TYPE_ID = process.env.CT_ACCOMMODATION_PRODUCT_TYPE_ID ?? '';
 const ROOM_PRODUCT_TYPE_KEY = process.env.CT_ACCOMMODATION_PRODUCT_TYPE_KEY ?? '';
 const CATALOG_PRODUCT_TYPE_ID = process.env.CT_CATALOG_PRODUCT_TYPE_ID ?? '';
 const CATALOG_PRODUCT_TYPE_KEY =
@@ -30,6 +30,15 @@ interface CTProductType {
 
 interface CTProductTypePagedQueryResponse {
   results?: CTProductType[];
+}
+
+interface CTInventoryEntry {
+  sku: string;
+  quantityOnHand: number;
+}
+
+interface CTInventoryPagedQueryResponse {
+  results: CTInventoryEntry[];
 }
 
 function getProductTypeWhereClause(productTypeId: string): string[] {
@@ -297,6 +306,29 @@ async function withCache<T>(key: string, loader: () => Promise<T>): Promise<T> {
   return value;
 }
 
+// Fetches quantityOnHand from CT's Inventory API for a batch of SKUs.
+// Returns a map of SKU → quantityOnHand; silently returns empty map on failure.
+async function fetchInventoryMap(skus: string[]): Promise<Map<string, number>> {
+  if (skus.length === 0) return new Map();
+  const where = `sku in (${skus.map((s) => `"${s}"`).join(',')})`;
+  try {
+    const data = await ctRequest<CTInventoryPagedQueryResponse>(
+      `/inventory?where=${encodeURIComponent(where)}&limit=${skus.length}`,
+    );
+    return new Map(data.results.map((e) => [e.sku, e.quantityOnHand]));
+  } catch {
+    return new Map();
+  }
+}
+
+function applyInventory(rooms: RoomProduct[], projections: CTProductProjection[], inventoryMap: Map<string, number>): RoomProduct[] {
+  return rooms.map((room, i) => {
+    const sku = projections[i]?.masterVariant?.sku;
+    const qty = sku ? inventoryMap.get(sku) : undefined;
+    return qty !== undefined ? { ...room, inventory: qty } : room;
+  });
+}
+
 export function ctProjectionToRoom(p: CTProductProjection): RoomProduct {
   const v = p.masterVariant;
   const centAmount = v.prices?.[0]?.value?.centAmount ?? 0;
@@ -308,10 +340,11 @@ export function ctProjectionToRoom(p: CTProductProjection): RoomProduct {
   const category = mapRoomCategory(rawCategory);
   const amenity = mapRoomAmenity(rawAmenity);
   const roomNumber = getAttrString(v, 'room-number', 'roomNumber', 'room-no', 'roomNo') || v.sku || p.key || p.id;
-  const floor = getAttrNumber(v, 'room-floor', 'roomFloor', 'floor');
-  const maxGuests = getAttrNumber(v, 'room-max-guests', 'roomMaxGuests', 'max-guests', 'maxGuests') || 2;
-  const amenityBadges = amenity === 'AC' ? ['AC'] : ['Natural Ventilation'];
-  const mergedAmenities = Array.from(new Set([...amenityBadges, ...amenities]));
+  const floor      = getAttrNumber(v, 'room-floor', 'roomFloor', 'floor');
+  const maxGuests  = getAttrNumber(v, 'room-max-guests', 'roomMaxGuests', 'max-guests', 'maxGuests') || 2;
+  const inventory  = getAttrNumber(v, 'room-inventory', 'roomInventory', 'inventory') || 2;
+  const amenityBadges    = amenity === 'AC' ? ['AC'] : ['Natural Ventilation'];
+  const mergedAmenities  = Array.from(new Set([...amenityBadges, ...amenities]));
 
   return {
     id: p.id,
@@ -324,6 +357,7 @@ export function ctProjectionToRoom(p: CTProductProjection): RoomProduct {
     roomNumber,
     pricePerNight,
     maxGuests,
+    inventory,
     images: v.images?.map((img) => img.url) ?? [],
     amenities: mergedAmenities,
     status: 'available',
@@ -511,7 +545,11 @@ export async function getRooms(limit = 20, offset = 0): Promise<RoomProduct[]> {
   const data = await ctRequest<CTProductProjectionPagedQueryResponse>(
     buildProductProjectionPath({ limit, offset, where })
   );
-  return (data.results ?? []).map(ctProjectionToRoom);
+  const projections = data.results ?? [];
+  const rooms = projections.map(ctProjectionToRoom);
+  const skuList = projections.map((p) => p.masterVariant.sku).filter(Boolean) as string[];
+  const inventoryMap = await fetchInventoryMap(skuList);
+  return applyInventory(rooms, projections, inventoryMap);
 }
 
 export async function searchRooms(query: string, limit = 20, offset = 0): Promise<RoomProduct[]> {
@@ -524,28 +562,30 @@ export async function searchRooms(query: string, limit = 20, offset = 0): Promis
       buildProductProjectionPath({ limit, offset, where, text: trimmed })
     );
 
-    return (data.results ?? [])
-      .map(ctProjectionToRoom)
-      .filter((room) =>
-        matchesSearchTokens(
-          [
-            room.name,
-            room.description,
-            room.category,
-            room.amenity,
-            room.roomNumber,
-            String(room.floor),
-            ...room.amenities,
-          ],
-          trimmed
-        )
-      );
+    const projections = data.results ?? [];
+    const rooms = projections.map(ctProjectionToRoom);
+    const skuList = projections.map((p) => p.masterVariant.sku).filter(Boolean) as string[];
+    const inventoryMap = await fetchInventoryMap(skuList);
+    const enriched = applyInventory(rooms, projections, inventoryMap);
+    return enriched.filter((room) =>
+      matchesSearchTokens(
+        [room.name, room.description, room.category, room.amenity, room.roomNumber, String(room.floor), ...room.amenities],
+        trimmed
+      )
+    );
   });
 }
 
 export async function getRoomById(id: string): Promise<RoomProduct> {
   const data = await ctRequest<CTProductProjection>(`/product-projections/${id}?staged=false`);
-  return ctProjectionToRoom(data);
+  const room = ctProjectionToRoom(data);
+  const sku = data.masterVariant.sku;
+  if (sku) {
+    const inventoryMap = await fetchInventoryMap([sku]);
+    const qty = inventoryMap.get(sku);
+    if (qty !== undefined) return { ...room, inventory: qty };
+  }
+  return room;
 }
 
 export async function createCTProduct(draft: Record<string, unknown>): Promise<CTProductProjection> {

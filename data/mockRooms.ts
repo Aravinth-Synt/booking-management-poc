@@ -17,6 +17,7 @@ export const MOCK_ROOMS: RoomProduct[] = [
     amenities: ['AC', 'Private Terrace', 'Butler Service', 'Free WiFi', 'Breakfast', 'King Bed', 'Thames View', 'Rain Shower', 'Mini Bar'],
     status: 'available',
     lockStatus: 'available',
+    inventory: 1,
   },
   {
     id: 'room-ct-002',
@@ -34,6 +35,7 @@ export const MOCK_ROOMS: RoomProduct[] = [
     amenities: ['AC', 'Free WiFi', 'Breakfast', 'King Bed', 'City View', 'Marble Bathroom', 'Nespresso Machine', 'Evening Turndown'],
     status: 'available',
     lockStatus: 'available',
+    inventory: 1,
   },
   {
     id: 'room-ct-003',
@@ -51,6 +53,7 @@ export const MOCK_ROOMS: RoomProduct[] = [
     amenities: ['AC', 'Free WiFi', 'Double Bed', 'City View', 'En-suite Bathroom', 'Flat-screen TV', 'Tea & Coffee Maker'],
     status: 'available',
     lockStatus: 'available',
+    inventory: 1,
   },
   {
     id: 'room-ct-004',
@@ -68,6 +71,7 @@ export const MOCK_ROOMS: RoomProduct[] = [
     amenities: ['Free WiFi', 'Two Single Beds', 'Heritage Décor', 'En-suite Shower', 'Flat-screen TV', 'Tea & Coffee Maker'],
     status: 'available',
     lockStatus: 'available',
+    inventory: 1,
   },
   {
     id: 'room-ct-005',
@@ -85,5 +89,6 @@ export const MOCK_ROOMS: RoomProduct[] = [
     amenities: ['Free WiFi', 'Single Bed', 'En-suite Shower', 'Flat-screen TV', 'Tea & Coffee Maker', 'Work Desk'],
     status: 'available',
     lockStatus: 'available',
+    inventory: 1,
   },
 ];

@@ -1,151 +1,171 @@
 import getRedisClient from './client';
 import type { RoomLock, LockStatusResponse } from '@/types';
 
-const LOCK_TTL = 600; // 10 minutes
-const LOCK_KEY = (roomId: string) => `room:lock:${roomId}`;
-const CONFIRMED_KEY = (roomId: string) => `room:confirmed:${roomId}`;
+const LOCK_TTL    = 600; // 10 minutes
+const SLOT_KEY    = (roomId: string)                  => `room:res:${roomId}`;
+const DETAIL_KEY  = (roomId: string, sid: string)     => `room:res:${roomId}:${sid}`;
+const CONFIRM_KEY = (roomId: string, sid: string)     => `room:confirmed:${roomId}:${sid}`;
 
 function datesOverlap(aIn: string, aOut: string, bIn: string, bOut: string): boolean {
-  const aStart = new Date(aIn).getTime();
-  const aEnd   = new Date(aOut).getTime();
-  const bStart = new Date(bIn).getTime();
-  const bEnd   = new Date(bOut).getTime();
-  return aStart < bEnd && bStart < aEnd;
-}
-
-function makeLock(roomId: string, sessionId: string, checkIn?: string, checkOut?: string, guestName?: string): RoomLock {
-  return {
-    roomId,
-    sessionId,
-    lockedAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + LOCK_TTL * 1000).toISOString(),
-    guestName,
-    checkIn,
-    checkOut,
-  };
+  return new Date(aIn).getTime() < new Date(bOut).getTime() &&
+         new Date(bIn).getTime() < new Date(aOut).getTime();
 }
 
 function makeReference(): string {
   return `LSY-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900000) + 100000)}`;
 }
 
-export async function acquireRoomLock(
+async function sweepAndGetMembers(roomId: string) {
+  const redis = getRedisClient();
+  // Remove entries whose score (expiresAt ms) is in the past
+  await redis.zremrangebyscore(SLOT_KEY(roomId), '-inf', Date.now() - 1);
+  const members = await redis.zrange(SLOT_KEY(roomId), 0, -1);
+  return { redis, members };
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+export async function reserveSlot(
   roomId: string,
   sessionId: string,
+  inventory: number,
   checkIn?: string,
   checkOut?: string,
-  guestName?: string
-): Promise<{ success: boolean; lock: RoomLock; expiresAt: string }> {
-  const lock = makeLock(roomId, sessionId, checkIn, checkOut, guestName);
+  guestName?: string,
+): Promise<{ success: boolean; slotsUsed: number; inventory: number; expiresAt: string; lock?: RoomLock }> {
+  const expiresAt = new Date(Date.now() + LOCK_TTL * 1000).toISOString();
 
   try {
-    const redis = getRedisClient();
-    const key   = LOCK_KEY(roomId);
-    const result = await redis.set(key, JSON.stringify(lock), 'EX', LOCK_TTL, 'NX');
+    const { redis, members } = await sweepAndGetMembers(roomId);
 
-    if (result === 'OK') {
-      return { success: true, lock, expiresAt: lock.expiresAt };
+    const detailKeys = members.map(sid => DETAIL_KEY(roomId, sid));
+    const raws: (string | null)[] = detailKeys.length > 0 ? await redis.mget(detailKeys) : [];
+    const details: RoomLock[]     = raws.flatMap(r => r ? [JSON.parse(r) as RoomLock] : []);
+
+    // Idempotent — session already holds a slot
+    const existing = details.find(d => d.sessionId === sessionId);
+    if (existing) {
+      return { success: true, slotsUsed: details.length, inventory, expiresAt: existing.expiresAt, lock: existing };
     }
 
-    // Lock already held — return existing
-    const existing = await redis.get(key);
-    const existingLock: RoomLock = existing ? JSON.parse(existing) : lock;
-    return { success: false, lock: existingLock, expiresAt: existingLock.expiresAt };
+    // Count only slots that overlap with the requested dates
+    const conflicting = checkIn && checkOut
+      ? details.filter(d => d.checkIn && d.checkOut && datesOverlap(checkIn, checkOut, d.checkIn, d.checkOut))
+      : details;
+
+    if (conflicting.length >= inventory) {
+      return { success: false, slotsUsed: conflicting.length, inventory, expiresAt };
+    }
+
+    const lock: RoomLock = {
+      roomId, sessionId,
+      lockedAt: new Date().toISOString(),
+      expiresAt, guestName, checkIn, checkOut,
+    };
+    await redis.zadd(SLOT_KEY(roomId), new Date(expiresAt).getTime(), sessionId);
+    await redis.set(DETAIL_KEY(roomId, sessionId), JSON.stringify(lock), 'EX', LOCK_TTL);
+
+    return { success: true, slotsUsed: conflicting.length + 1, inventory, expiresAt, lock };
   } catch {
-    // Redis unavailable — allow booking to proceed without distributed lock
-    return { success: true, lock, expiresAt: lock.expiresAt };
+    // Redis unavailable — allow the booking to proceed
+    const lock: RoomLock = { roomId, sessionId, lockedAt: new Date().toISOString(), expiresAt, guestName, checkIn, checkOut };
+    return { success: true, slotsUsed: 1, inventory, expiresAt, lock };
   }
 }
 
-export async function releaseRoomLock(roomId: string, sessionId: string): Promise<boolean> {
+export async function releaseSlot(roomId: string, sessionId: string): Promise<boolean> {
   try {
     const redis = getRedisClient();
-    const key   = LOCK_KEY(roomId);
-    const raw   = await redis.get(key);
-
-    if (!raw) return true; // idempotent
-
-    const lock: RoomLock = JSON.parse(raw);
-    if (lock.sessionId !== sessionId) throw new Error('Not your lock');
-
-    await redis.del(key);
+    await redis.zrem(SLOT_KEY(roomId), sessionId);
+    await redis.del(DETAIL_KEY(roomId, sessionId));
     return true;
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : '';
-    if (msg === 'Not your lock') throw err; // re-throw auth error
-    return true; // Redis unavailable — treat as released
-  }
-}
-
-export async function getRoomLockStatus(
-  roomId: string,
-  checkIn?: string,
-  checkOut?: string,
-): Promise<LockStatusResponse> {
-  try {
-    const redis = getRedisClient();
-    const raw   = await redis.get(LOCK_KEY(roomId));
-
-    if (!raw) return { status: 'available' };
-
-    const lock: RoomLock = JSON.parse(raw);
-    const secondsRemaining = Math.max(0, Math.floor((new Date(lock.expiresAt).getTime() - Date.now()) / 1000));
-
-    // If caller provided dates and the lock has dates, check for overlap.
-    // dateConflict === false means the lock is for different dates — room is still bookable.
-    let dateConflict: boolean | undefined;
-    if (checkIn && checkOut && lock.checkIn && lock.checkOut) {
-      dateConflict = datesOverlap(checkIn, checkOut, lock.checkIn, lock.checkOut);
-    }
-
-    return { status: 'locked', lock, secondsRemaining, dateConflict };
   } catch {
-    return { status: 'available' }; // Redis unavailable — treat as available
+    return true;
   }
 }
 
-export async function confirmRoomLock(roomId: string, sessionId: string): Promise<string> {
+export async function confirmSlot(roomId: string, sessionId: string): Promise<string> {
   const bookingReference = makeReference();
-
   try {
     const redis = getRedisClient();
-    const key   = LOCK_KEY(roomId);
-    const raw   = await redis.get(key);
-
+    const raw   = await redis.get(DETAIL_KEY(roomId, sessionId));
     if (raw) {
-      const lock: RoomLock = JSON.parse(raw);
-      if (lock.sessionId !== sessionId) throw new Error('Session mismatch — reservation belongs to another guest');
+      const detail: RoomLock = JSON.parse(raw);
+      if (detail.sessionId !== sessionId) throw new Error('Session mismatch — reservation belongs to another guest');
     }
-    // If no lock key found (Redis just came back up), proceed — lock may have expired
-
-    await redis.set(CONFIRMED_KEY(roomId), JSON.stringify({ bookingReference, confirmedAt: new Date().toISOString() }));
-    await redis.del(key);
+    await redis.set(CONFIRM_KEY(roomId, sessionId), JSON.stringify({ bookingReference, confirmedAt: new Date().toISOString() }));
+    await redis.zrem(SLOT_KEY(roomId), sessionId);
+    await redis.del(DETAIL_KEY(roomId, sessionId));
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : '';
-    if (msg.startsWith('Session mismatch')) throw err; // re-throw auth error
-    // Redis unavailable — still return a reference so the booking can complete
+    if (msg.startsWith('Session mismatch')) throw err;
   }
-
   return bookingReference;
 }
 
-export async function getLockRemainingTTL(roomId: string): Promise<number> {
+export async function getSlotStatus(
+  roomId: string,
+  checkIn?: string,
+  checkOut?: string,
+  inventory = 5,
+): Promise<LockStatusResponse> {
   try {
-    return await getRedisClient().ttl(LOCK_KEY(roomId));
+    const { redis, members } = await sweepAndGetMembers(roomId);
+
+    if (members.length === 0) {
+      return { status: 'available', slotsAvailable: inventory, slotsTotal: inventory };
+    }
+
+    const detailKeys = members.map(sid => DETAIL_KEY(roomId, sid));
+    const raws: (string | null)[] = await redis.mget(detailKeys);
+    const details: RoomLock[]     = raws.flatMap(r => r ? [JSON.parse(r) as RoomLock] : []);
+
+    const conflicting = checkIn && checkOut
+      ? details.filter(d => d.checkIn && d.checkOut && datesOverlap(checkIn, checkOut, d.checkIn, d.checkOut))
+      : details;
+
+    const slotsUsed      = conflicting.length;
+    const slotsAvailable = Math.max(0, inventory - slotsUsed);
+    const status: 'locked' | 'available' = slotsAvailable === 0 ? 'locked' : 'available';
+
+    const first = conflicting[0];
+    const secondsRemaining = first
+      ? Math.max(0, Math.floor((new Date(first.expiresAt).getTime() - Date.now()) / 1000))
+      : undefined;
+
+    let dateConflict: boolean | undefined;
+    if (checkIn && checkOut && first?.checkIn && first?.checkOut) {
+      dateConflict = datesOverlap(checkIn, checkOut, first.checkIn, first.checkOut);
+    }
+
+    return { status, lock: first, secondsRemaining, dateConflict, slotsAvailable, slotsTotal: inventory };
   } catch {
-    return -1;
+    return { status: 'available', slotsAvailable: inventory, slotsTotal: inventory };
   }
 }
 
-export async function isRoomLockedBySession(roomId: string, sessionId: string): Promise<boolean> {
+export async function isSessionSlotActive(roomId: string, sessionId: string): Promise<boolean> {
   try {
-    const redis = getRedisClient();
-    const raw   = await redis.get(LOCK_KEY(roomId));
-    if (!raw) return false;
-    const lock: RoomLock = JSON.parse(raw);
-    return lock.sessionId === sessionId;
+    const raw = await getRedisClient().get(DETAIL_KEY(roomId, sessionId));
+    return raw !== null;
   } catch {
-    // Redis unavailable — assume session holds the lock so checkout can complete
-    return true;
+    return true; // Redis unavailable — allow checkout to complete
   }
 }
+
+// ─── Backward-compat aliases (used by bookingService and existing routes) ─────
+
+export const acquireRoomLock = (
+  roomId: string, sessionId: string, checkIn?: string, checkOut?: string, guestName?: string,
+) => reserveSlot(roomId, sessionId, 5, checkIn, checkOut, guestName)
+  .then(r => ({
+    success: r.success,
+    lock: r.lock ?? { roomId, sessionId, lockedAt: new Date().toISOString(), expiresAt: r.expiresAt },
+    expiresAt: r.expiresAt,
+  }));
+
+export const releaseRoomLock        = releaseSlot;
+export const confirmRoomLock        = confirmSlot;
+export const getRoomLockStatus      = (roomId: string, checkIn?: string, checkOut?: string, inventory?: number) =>
+  getSlotStatus(roomId, checkIn, checkOut, inventory);
+export const isRoomLockedBySession  = isSessionSlotActive;

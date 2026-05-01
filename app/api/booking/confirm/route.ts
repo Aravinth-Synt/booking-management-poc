@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isRoomLockedBySession } from '@/lib/redis/roomLock';
+import { isSessionSlotActive } from '@/lib/redis/roomLock';
 import { createBooking } from '@/lib/booking/bookingService';
 import { getRoomById } from '@/lib/commercetools/products';
 import { MOCK_ROOMS } from '@/data/mockRooms';
@@ -13,13 +13,16 @@ export async function POST(req: NextRequest) {
     if (!roomId || !sessionId || !checkIn || !checkOut || !guestDetails?.email) {
       return NextResponse.json(
         { error: 'roomId, sessionId, checkIn, checkOut, and guestDetails.email are required' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    const locked = await isRoomLockedBySession(roomId, sessionId);
-    if (!locked) {
-      return NextResponse.json({ error: 'Reservation expired or belongs to another session' }, { status: 409 });
+    const slotActive = await isSessionSlotActive(roomId, sessionId);
+    if (!slotActive) {
+      return NextResponse.json(
+        { error: 'Reservation expired or belongs to another session' },
+        { status: 409 },
+      );
     }
 
     let roomName = 'Room';
