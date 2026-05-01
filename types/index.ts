@@ -46,6 +46,21 @@ export interface GuestDetails {
   specialRequests?: string;
 }
 
+export interface CartItem {
+  roomId: string;
+  sessionId: string;
+  roomName: string;
+  roomImage: string;
+  category: string;
+  amenity: string;
+  checkIn: string;
+  checkOut: string;
+  guests: number;
+  pricePerNight: number;
+  nights: number;
+  expiresAt: string;
+}
+
 export interface BookingRequest {
   roomId: string;
   sessionId: string;

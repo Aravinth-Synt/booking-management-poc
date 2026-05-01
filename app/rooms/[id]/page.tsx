@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter, useParams, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
+import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import RoomStatusBadge from '@/components/RoomStatusBadge';
 import ReservationTimer from '@/components/ReservationTimer';
 import LockOverlay from '@/components/LockOverlay';
 import type { RoomProduct, LockStatusResponse, RoomLock } from '@/types';
+import { addToCart, isInCart, getCart } from '@/lib/cart';
 import { MOCK_ROOMS } from '@/data/mockRooms';
 
 const FALLBACK = 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&q=80';
@@ -38,7 +40,6 @@ function tomorrowStr() {
 }
 
 export default function RoomDetailPage() {
-  const router       = useRouter();
   const { id }       = useParams<{ id: string }>();
   const searchParams = useSearchParams();
 
@@ -46,10 +47,12 @@ export default function RoomDetailPage() {
   const [lockStatus, setLockStatus] = useState<LockStatusResponse>({ status: 'available' });
   const [checkIn,    setCheckIn]    = useState(() => searchParams.get('checkIn')  || todayStr());
   const [checkOut,   setCheckOut]   = useState(() => searchParams.get('checkOut') || tomorrowStr());
-  const [guests,     setGuests]     = useState(1);
+  const [guests,     setGuests]     = useState(() => Number(searchParams.get('guests') || '1'));
   const [reserving,  setReserving]  = useState(false);
   const [mySessionId]               = useState(() => getOrCreateSessionId());
   const [myLock,     setMyLock]     = useState<RoomLock | null>(null);
+  const [inCart,     setInCart]     = useState(false);
+  const [cartCount,  setCartCount]  = useState(0);
 
   // Ref keeps current params available to the polling interval without recreating it
   const statusParamsRef = useRef({ checkIn, checkOut, inventory: 5 });
@@ -91,6 +94,11 @@ export default function RoomDetailPage() {
     } catch {}
   }, [id]);
 
+  useEffect(() => {
+    setInCart(isInCart(id));
+    setCartCount(getCart().length);
+  }, [id]);
+
   useEffect(() => { fetchRoom(); }, [fetchRoom]);
 
   useEffect(() => {
@@ -99,7 +107,7 @@ export default function RoomDetailPage() {
   }, [pollLockStatus]);
 
   async function handleReserve() {
-    if (!checkIn || !checkOut || calculateNights(checkIn, checkOut) < 1) return;
+    if (!checkIn || !checkOut || calculateNights(checkIn, checkOut) < 1 || !room) return;
     setReserving(true);
     try {
       const res = await fetch('/api/booking/reserve', {
@@ -107,25 +115,37 @@ export default function RoomDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           roomId: id, sessionId: mySessionId, checkIn, checkOut,
-          guestName: '', inventory: room?.inventory ?? 5,
+          guestName: '', inventory: room.inventory ?? 5,
         }),
       });
       const data = await res.json();
       if (res.ok) {
         setMyLock(data.lock);
-        const params = new URLSearchParams({
-          roomId: id, sessionId: mySessionId,
-          checkIn, checkOut, guests: String(guests),
-          expiresAt: data.expiresAt ?? '',
+        const nightCount = calculateNights(checkIn, checkOut);
+        addToCart({
+          roomId:       id,
+          sessionId:    mySessionId,
+          roomName:     room.name,
+          roomImage:    room.images[0] ?? '',
+          category:     room.category,
+          amenity:      room.amenity,
+          checkIn,
+          checkOut,
+          guests,
+          pricePerNight: room.pricePerNight,
+          nights:       nightCount,
+          expiresAt:    data.expiresAt ?? '',
         });
-        router.push(`/cart?${params.toString()}`);
+        const newCount = getCart().length;
+        setInCart(true);
+        setCartCount(newCount);
       } else if (res.status === 409) {
         setLockStatus({
-          status:         'locked',
-          lock:           data.lock,
+          status:           'locked',
+          lock:             data.lock,
           secondsRemaining: data.secondsRemaining,
-          slotsAvailable: 0,
-          slotsTotal:     data.inventory,
+          slotsAvailable:   0,
+          slotsTotal:       data.inventory,
         });
       }
     } finally {
@@ -307,21 +327,42 @@ export default function RoomDetailPage() {
               </div>
             )}
 
-            <button
-              onClick={handleReserve}
-              disabled={reserving || isLockedByOther || nights < 1}
-              className={`w-full py-3 text-sm font-medium tracking-wider uppercase transition-colors ${
-                isLockedByOther
-                  ? 'bg-crimson-100 text-crimson-500 cursor-not-allowed border border-crimson-200'
-                  : 'bg-forest-500 hover:bg-forest-600 disabled:bg-forest-200 text-white'
-              }`}
-            >
-              {reserving ? 'Reserving…' : isLockedByOther ? 'Not Available for These Dates' : 'Reserve This Room'}
-            </button>
-
-            <p className="text-xs text-gray-400 text-center">
-              Your room will be held for 10 minutes while you complete checkout.
-            </p>
+            {inCart ? (
+              <div className="space-y-2">
+                <div className="bg-forest-50 border border-forest-200 p-3 text-center">
+                  <p className="text-xs font-semibold text-forest-700 uppercase tracking-wider">Room Added to Cart</p>
+                </div>
+                <Link
+                  href="/cart"
+                  className="block w-full py-3 text-sm font-medium tracking-wider uppercase text-center bg-forest-500 hover:bg-forest-600 text-white transition-colors"
+                >
+                  View Cart ({cartCount})
+                </Link>
+                <Link
+                  href="/rooms"
+                  className="block w-full py-3 text-sm font-medium tracking-wider uppercase text-center bg-white border border-ivory-200 hover:border-forest-300 text-gray-600 transition-colors"
+                >
+                  Browse More Rooms
+                </Link>
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={handleReserve}
+                  disabled={reserving || isLockedByOther || nights < 1}
+                  className={`w-full py-3 text-sm font-medium tracking-wider uppercase transition-colors ${
+                    isLockedByOther
+                      ? 'bg-crimson-100 text-crimson-500 cursor-not-allowed border border-crimson-200'
+                      : 'bg-forest-500 hover:bg-forest-600 disabled:bg-forest-200 text-white'
+                  }`}
+                >
+                  {reserving ? 'Reserving…' : isLockedByOther ? 'Not Available for These Dates' : 'Add to Cart'}
+                </button>
+                <p className="text-xs text-gray-400 text-center">
+                  Room held for 10 min. Add more rooms or proceed to checkout.
+                </p>
+              </>
+            )}
           </div>
         </div>
       </div>

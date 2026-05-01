@@ -1,18 +1,21 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import ReservationTimer from '@/components/ReservationTimer';
-import type { RoomProduct, GuestDetails, LockStatusResponse } from '@/types';
-import { MOCK_ROOMS } from '@/data/mockRooms';
+import type { CartItem, GuestDetails } from '@/types';
+import { getCart, clearCart } from '@/lib/cart';
 
 function formatCurrency(n: number) {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 0 }).format(n);
 }
 
-function calculateNights(a: string, b: string) {
-  return Math.max(1, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000));
+function formatDate(d: string) {
+  if (!d) return d;
+  try {
+    return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch { return d; }
 }
 
 function LockExpiredPanel() {
@@ -25,9 +28,11 @@ function LockExpiredPanel() {
           </svg>
         </div>
         <h2 className="font-display text-2xl font-semibold text-gray-900 mb-2">Reservation Expired</h2>
-        <p className="text-gray-500 text-sm mb-6">Your 10-minute reservation window has passed. Please go back and reserve the room again.</p>
-        <a href="/rooms" className="inline-block bg-forest-500 hover:bg-forest-600 text-white text-sm font-medium px-6 py-3 tracking-wider uppercase transition-colors">
-          Back to Rooms
+        <p className="text-gray-500 text-sm mb-6">
+          One or more room reservations have expired. Please go back to your cart and re-add the rooms.
+        </p>
+        <a href="/cart" className="inline-block bg-forest-500 hover:bg-forest-600 text-white text-sm font-medium px-6 py-3 tracking-wider uppercase transition-colors">
+          Back to Cart
         </a>
       </div>
     </div>
@@ -36,83 +41,87 @@ function LockExpiredPanel() {
 
 function CheckoutInner() {
   const router = useRouter();
-  const params = useSearchParams();
-  const roomId     = params.get('roomId') ?? '';
-  const sessionId  = params.get('sessionId') ?? '';
-  const checkIn    = params.get('checkIn') ?? '';
-  const checkOut   = params.get('checkOut') ?? '';
-  const guestCount = Number(params.get('guests') ?? '1');
-  const expiresAt  = params.get('expiresAt') ?? '';
-
-  const [room, setRoom] = useState<RoomProduct | null>(null);
-  const [lockStatus, setLockStatus] = useState<LockStatusResponse | null>(null);
+  const [items, setItems] = useState<CartItem[]>([]);
   const [expired, setExpired] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [guest, setGuest] = useState<GuestDetails>({
     firstName: '', lastName: '', email: '', phone: '', specialRequests: '',
   });
 
-  const nights = calculateNights(checkIn, checkOut);
-  const total = room ? room.pricePerNight * nights : 0;
-
   useEffect(() => {
-    // If expiresAt is already past before we even check, show expired immediately.
-    if (expiresAt && new Date(expiresAt).getTime() <= Date.now()) {
-      setExpired(true);
+    const cart = getCart();
+    if (cart.length === 0) {
+      router.replace('/cart');
       return;
     }
+    // If any lock is already past expiry on load, show expired immediately
+    const anyExpired = cart.some((c) => c.expiresAt && new Date(c.expiresAt).getTime() <= Date.now());
+    if (anyExpired) { setExpired(true); return; }
+    setItems(cart);
+  }, [router]);
 
-    fetch(`/api/rooms/${roomId}`)
-      .then((r) => r.json())
-      .then(setRoom)
-      .catch(() => setRoom(MOCK_ROOMS.find((r) => r.id === roomId) ?? MOCK_ROOMS[0]));
-
-    fetch(`/api/booking/status/${roomId}`)
-      .then((r) => r.json())
-      .then((data: LockStatusResponse) => {
-        setLockStatus(data);
-        // Only treat as expired if Redis explicitly confirms the lock is gone
-        // AND we have no valid local expiresAt timestamp to fall back on.
-        // When Redis is down, status comes back as 'available' but expiresAt
-        // is still in the future — we trust the local timer in that case.
-        const lockHeldByUs = data.status === 'locked' && data.lock?.sessionId === sessionId;
-        const localTimerValid = expiresAt && new Date(expiresAt).getTime() > Date.now();
-        if (!lockHeldByUs && !localTimerValid) {
-          setExpired(true);
-        }
-      })
-      .catch(() => {
-        // Network/Redis error — fall back to local timer only
-      });
-  }, [roomId, sessionId, expiresAt]);
+  const grandTotal = items.reduce((sum, c) => sum + c.pricePerNight * c.nights, 0);
+  const earliestExpiry = items.reduce<string>((min, c) =>
+    !min || (c.expiresAt && c.expiresAt < min) ? c.expiresAt : min, '');
 
   async function handleConfirm() {
     if (!guest.firstName || !guest.lastName || !guest.email || !guest.phone) return;
     setSubmitting(true);
     try {
-      const res = await fetch('/api/booking/confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          roomId, sessionId, checkIn, checkOut,
-          guests: guestCount,
-          guestDetails: guest,
-          totalAmount: total,
-          currency: 'GBP',
-        }),
-      });
-      const data = await res.json();
-      const ref = data.confirmation?.bookingReference ?? `DEMO-LSY-${Date.now()}`;
-      router.push(`/thank-you?ref=${ref}&room=${encodeURIComponent(room?.name ?? '')}&checkIn=${checkIn}&checkOut=${checkOut}&nights=${nights}&total=${total}&name=${encodeURIComponent(guest.firstName + ' ' + guest.lastName)}`);
-    } catch {
-      const ref = `DEMO-LSY-${Date.now()}`;
-      router.push(`/thank-you?ref=${ref}&room=${encodeURIComponent(room?.name ?? '')}&checkIn=${checkIn}&checkOut=${checkOut}&nights=${nights}&total=${total}&name=${encodeURIComponent(guest.firstName + ' ' + guest.lastName)}`);
+      const confirmations: Array<{ ref: string; roomName: string; checkIn: string; checkOut: string; nights: number; total: number }> = [];
+
+      for (const item of items) {
+        const itemTotal = item.pricePerNight * item.nights;
+        try {
+          const res = await fetch('/api/booking/confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              roomId: item.roomId,
+              sessionId: item.sessionId,
+              checkIn: item.checkIn,
+              checkOut: item.checkOut,
+              guests: item.guests,
+              guestDetails: guest,
+              totalAmount: itemTotal,
+              currency: 'GBP',
+            }),
+          });
+          const data = await res.json();
+          confirmations.push({
+            ref:      data.confirmation?.bookingReference ?? `DEMO-LSY-${Date.now()}`,
+            roomName: item.roomName,
+            checkIn:  item.checkIn,
+            checkOut: item.checkOut,
+            nights:   item.nights,
+            total:    itemTotal,
+          });
+        } catch {
+          confirmations.push({
+            ref:      `DEMO-LSY-${Date.now()}`,
+            roomName: item.roomName,
+            checkIn:  item.checkIn,
+            checkOut: item.checkOut,
+            nights:   item.nights,
+            total:    itemTotal,
+          });
+        }
+      }
+
+      clearCart();
+      sessionStorage.setItem('lsy_order', JSON.stringify({
+        guestName: `${guest.firstName} ${guest.lastName}`,
+        grandTotal,
+        items: confirmations,
+      }));
+      router.push('/thank-you');
     } finally {
       setSubmitting(false);
     }
   }
 
   if (expired) return <LockExpiredPanel />;
+  if (items.length === 0) return null;
 
   return (
     <div className="min-h-screen bg-ivory-50">
@@ -124,14 +133,12 @@ function CheckoutInner() {
           <div className="gold-divider w-12 mt-3" />
         </div>
 
-        {/* Timer banner — uses URL expiresAt so it shows even when Redis is down */}
-        {(expiresAt || lockStatus?.lock?.expiresAt) && (
+        {earliestExpiry && (
           <div className="bg-forest-50 border border-forest-200 p-4 mb-6">
-            <p className="text-xs text-forest-600 font-medium uppercase tracking-wider mb-2">Reservation Timer</p>
-            <ReservationTimer
-              expiresAt={expiresAt || lockStatus!.lock!.expiresAt}
-              onExpire={() => setExpired(true)}
-            />
+            <p className="text-xs text-forest-600 font-medium uppercase tracking-wider mb-2">
+              Reservation Timer — complete checkout before the first hold expires
+            </p>
+            <ReservationTimer expiresAt={earliestExpiry} onExpire={() => setExpired(true)} />
           </div>
         )}
 
@@ -141,10 +148,10 @@ function CheckoutInner() {
             <h2 className="font-display text-xl font-semibold text-gray-900 mb-5">Guest Details</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {[
-                { name: 'firstName', label: 'First Name', type: 'text', required: true, full: false },
-                { name: 'lastName',  label: 'Last Name',  type: 'text', required: true, full: false },
-                { name: 'email',     label: 'Email Address', type: 'email', required: true, full: true },
-                { name: 'phone',     label: 'Phone Number',  type: 'tel',   required: true, full: true },
+                { name: 'firstName', label: 'First Name',    type: 'text',  required: true,  full: false },
+                { name: 'lastName',  label: 'Last Name',     type: 'text',  required: true,  full: false },
+                { name: 'email',     label: 'Email Address', type: 'email', required: true,  full: true  },
+                { name: 'phone',     label: 'Phone Number',  type: 'tel',   required: true,  full: true  },
               ].map((f) => (
                 <div key={f.name} className={f.full ? 'sm:col-span-2' : ''}>
                   <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">
@@ -181,7 +188,9 @@ function CheckoutInner() {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
               )}
-              {submitting ? 'Confirming Booking…' : 'Confirm Booking'}
+              {submitting
+                ? `Confirming ${items.length} room${items.length !== 1 ? 's' : ''}…`
+                : `Confirm ${items.length} Room${items.length !== 1 ? 's' : ''}`}
             </button>
             <p className="text-xs text-gray-400 text-center mt-3">
               By confirming you agree to our cancellation policy. A confirmation will be emailed to {guest.email || 'you'}.
@@ -190,47 +199,29 @@ function CheckoutInner() {
 
           {/* Summary sidebar */}
           <div className="bg-white border border-ivory-200 p-5 self-start space-y-4">
-            <h3 className="font-display text-lg font-semibold text-gray-900">Booking Summary</h3>
+            <h3 className="font-display text-lg font-semibold text-gray-900">Order Summary</h3>
             <div className="gold-divider" />
-            {room && (
-              <>
-                <div>
-                  <p className="text-xs text-gray-400 uppercase tracking-wider">Room</p>
-                  <p className="font-medium text-gray-800 mt-0.5">{room.name}</p>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-xs text-gray-400 uppercase tracking-wider">Check-in</p>
-                    <p className="text-sm font-medium text-gray-800 mt-0.5">{checkIn}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400 uppercase tracking-wider">Check-out</p>
-                    <p className="text-sm font-medium text-gray-800 mt-0.5">{checkOut}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-xs text-gray-400 uppercase tracking-wider">Nights</p>
-                    <p className="text-sm font-medium text-gray-800 mt-0.5">{nights}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400 uppercase tracking-wider">Guests</p>
-                    <p className="text-sm font-medium text-gray-800 mt-0.5">{guestCount}</p>
-                  </div>
-                </div>
-                <div className="gold-divider" />
-                <div className="space-y-1">
+
+            <div className="space-y-4">
+              {items.map((item) => (
+                <div key={item.roomId} className="space-y-1">
+                  <p className="text-sm font-semibold text-gray-800">{item.roomName}</p>
+                  <p className="text-xs text-gray-400">
+                    {formatDate(item.checkIn)} → {formatDate(item.checkOut)} · {item.guests} guest{item.guests !== 1 ? 's' : ''}
+                  </p>
                   <div className="flex justify-between text-sm text-gray-500">
-                    <span>{formatCurrency(room.pricePerNight)} × {nights} nights</span>
-                    <span>{formatCurrency(total)}</span>
-                  </div>
-                  <div className="flex justify-between font-semibold text-gray-900 pt-1">
-                    <span>Total</span>
-                    <span className="text-forest-600">{formatCurrency(total)}</span>
+                    <span>{formatCurrency(item.pricePerNight)} × {item.nights} nights</span>
+                    <span>{formatCurrency(item.pricePerNight * item.nights)}</span>
                   </div>
                 </div>
-              </>
-            )}
+              ))}
+            </div>
+
+            <div className="gold-divider" />
+            <div className="flex justify-between font-semibold text-gray-900">
+              <span>Grand Total</span>
+              <span className="text-forest-600">{formatCurrency(grandTotal)}</span>
+            </div>
           </div>
         </div>
       </div>

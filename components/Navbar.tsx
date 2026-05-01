@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { getCart } from '@/lib/cart';
 
 interface Suggestion {
   id: string;
@@ -18,7 +19,15 @@ export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [cartCount, setCartCount] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function syncCart() { setCartCount(getCart().length); }
+    syncCart();
+    window.addEventListener('storage', syncCart);
+    return () => window.removeEventListener('storage', syncCart);
+  }, []);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -194,6 +203,16 @@ export default function Navbar() {
           </Link>
           <Link href="/rooms" className="text-sm text-gray-500 hover:text-forest-600 font-medium transition-colors tracking-wide">
             Rooms
+          </Link>
+          <Link href="/cart" className="relative text-gray-500 hover:text-forest-600 transition-colors" aria-label="Cart">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-1.5 6h13M10 19a1 1 0 100 2 1 1 0 000-2zm7 0a1 1 0 100 2 1 1 0 000-2z" />
+            </svg>
+            {cartCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-forest-500 text-white text-[10px] font-bold flex items-center justify-center">
+                {cartCount}
+              </span>
+            )}
           </Link>
           <Link
             href="/rooms"

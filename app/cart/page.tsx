@@ -1,13 +1,12 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Image from 'next/image';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import Navbar from '@/components/Navbar';
 import ReservationTimer from '@/components/ReservationTimer';
-import type { RoomProduct } from '@/types';
-import { MOCK_ROOMS } from '@/data/mockRooms';
+import type { CartItem } from '@/types';
+import { getCart, removeFromCart } from '@/lib/cart';
 
 const FALLBACK = 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&q=80';
 
@@ -22,181 +21,198 @@ function formatDate(d: string) {
   } catch { return d; }
 }
 
-function calculateNights(a: string, b: string) {
-  return Math.max(1, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000));
-}
-
 const CATEGORY_STYLE: Record<string, string> = {
   LUXURY:   'bg-gold-100 text-gold-700 border-gold-200',
   MODERATE: 'bg-forest-50 text-forest-600 border-forest-200',
   BUDGET:   'bg-ivory-100 text-gray-500 border-ivory-300',
 };
 
-function CartInner() {
-  const router = useRouter();
-  const params = useSearchParams();
+function CartItemCard({ item, onRemove }: { item: CartItem; onRemove: (roomId: string) => void }) {
+  const total = item.pricePerNight * item.nights;
 
-  const roomId    = params.get('roomId') ?? '';
-  const sessionId = params.get('sessionId') ?? '';
-  const checkIn   = params.get('checkIn') ?? '';
-  const checkOut  = params.get('checkOut') ?? '';
-  const guests    = Number(params.get('guests') ?? '1');
-  const expiresAt = params.get('expiresAt') ?? '';
-
-  const [room, setRoom] = useState<RoomProduct | null>(null);
-  const [expired, setExpired] = useState(false);
-
-  const nights = calculateNights(checkIn, checkOut);
-  const total  = room ? room.pricePerNight * nights : 0;
-
-  useEffect(() => {
-    fetch(`/api/rooms/${roomId}`)
-      .then((r) => r.json())
-      .then(setRoom)
-      .catch(() => setRoom(MOCK_ROOMS.find((r) => r.id === roomId) ?? MOCK_ROOMS[0]));
-  }, [roomId]);
-
-  function handleExpire() {
-    setExpired(true);
-    router.push('/rooms');
+  async function handleRemove() {
+    try {
+      await fetch('/api/booking/release', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId: item.roomId, sessionId: item.sessionId }),
+      });
+    } catch { /* release best-effort */ }
+    onRemove(item.roomId);
   }
 
-  if (expired) return null;
+  function handleExpire() {
+    removeFromCart(item.roomId);
+    onRemove(item.roomId);
+  }
+
+  return (
+    <div className="bg-white border border-ivory-200 overflow-hidden">
+      <div className="flex flex-col sm:flex-row">
+        <div className="relative h-40 sm:w-48 sm:h-auto shrink-0 bg-ivory-100">
+          <Image
+            src={item.roomImage || FALLBACK}
+            alt={item.roomName}
+            fill
+            className="object-cover"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = FALLBACK; }}
+          />
+          <div className="absolute top-2 left-2 flex gap-1">
+            <span className={`text-xs font-medium px-2 py-0.5 border ${CATEGORY_STYLE[item.category] ?? ''}`}>
+              {item.category}
+            </span>
+            {item.amenity === 'AC' && (
+              <span className="text-xs font-medium px-2 py-0.5 bg-white/90 text-forest-600 border border-forest-200">
+                AC
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex-1 p-5 flex flex-col gap-3">
+          <div className="flex items-start justify-between gap-3">
+            <h3 className="font-display text-xl font-semibold text-gray-900">{item.roomName}</h3>
+            <button
+              onClick={handleRemove}
+              className="text-xs text-gray-400 hover:text-crimson-500 transition-colors border border-ivory-200 hover:border-crimson-200 px-3 py-1 shrink-0"
+            >
+              Remove
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+            <div>
+              <p className="text-xs text-gray-400 uppercase tracking-wider">Check-in</p>
+              <p className="font-medium text-gray-800 mt-0.5">{formatDate(item.checkIn)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 uppercase tracking-wider">Check-out</p>
+              <p className="font-medium text-gray-800 mt-0.5">{formatDate(item.checkOut)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 uppercase tracking-wider">Guests</p>
+              <p className="font-medium text-gray-800 mt-0.5">{item.guests} guest{item.guests !== 1 ? 's' : ''}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 uppercase tracking-wider">Total</p>
+              <p className="font-medium text-forest-600 mt-0.5">{formatCurrency(total)}</p>
+            </div>
+          </div>
+
+          <div className="text-xs text-gray-400">
+            {formatCurrency(item.pricePerNight)} × {item.nights} night{item.nights !== 1 ? 's' : ''}
+          </div>
+
+          {item.expiresAt && (
+            <div className="border-t border-ivory-100 pt-3">
+              <p className="text-xs text-gray-400 uppercase tracking-wider mb-1.5">Reservation hold</p>
+              <ReservationTimer expiresAt={item.expiresAt} onExpire={handleExpire} />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CartInner() {
+  const [items, setItems] = useState<CartItem[]>([]);
+
+  useEffect(() => {
+    setItems(getCart());
+  }, []);
+
+  const handleRemove = useCallback((roomId: string) => {
+    removeFromCart(roomId);
+    setItems(getCart());
+  }, []);
+
+  const grandTotal = items.reduce((sum, c) => sum + c.pricePerNight * c.nights, 0);
+
+  if (items.length === 0) {
+    return (
+      <div className="min-h-screen bg-ivory-50">
+        <Navbar />
+        <div className="max-w-5xl mx-auto px-4 pt-28 pb-16 text-center">
+          <p className="text-gold-600 text-xs tracking-[0.3em] uppercase mb-2">Cart</p>
+          <h1 className="font-display text-4xl font-semibold text-gray-900 mb-4">Your Cart is Empty</h1>
+          <p className="text-gray-400 text-sm mb-8">Browse our rooms and add one or more to your cart before checking out.</p>
+          <Link
+            href="/rooms"
+            className="inline-block bg-forest-500 hover:bg-forest-600 text-white text-sm font-medium px-8 py-3 tracking-wider uppercase transition-colors"
+          >
+            Browse Rooms
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-ivory-50">
       <Navbar />
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-16">
 
-        {/* Header */}
         <div className="mb-8">
           <p className="text-gold-600 text-xs tracking-[0.3em] uppercase mb-1">Step 1 of 2</p>
-          <h1 className="font-display text-4xl font-semibold text-gray-900">Your Cart</h1>
+          <h1 className="font-display text-4xl font-semibold text-gray-900">
+            Your Cart
+            <span className="ml-3 text-lg font-body font-normal text-gray-400">
+              {items.length} room{items.length !== 1 ? 's' : ''}
+            </span>
+          </h1>
           <div className="gold-divider w-12 mt-3" />
         </div>
 
-        {/* Timer banner */}
-        {expiresAt && (
-          <div className="bg-forest-50 border border-forest-200 p-4 mb-6">
-            <p className="text-xs text-forest-600 font-medium uppercase tracking-wider mb-2">
-              Room Reserved — Complete checkout before time runs out
-            </p>
-            <ReservationTimer expiresAt={expiresAt} onExpire={handleExpire} />
-          </div>
-        )}
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Room list */}
+          <div className="lg:col-span-2 space-y-4">
+            {items.map((item) => (
+              <CartItemCard key={item.roomId} item={item} onRemove={handleRemove} />
+            ))}
 
-          {/* Room card */}
-          <div className="lg:col-span-2 bg-white border border-ivory-200 overflow-hidden">
-            {room ? (
-              <>
-                <div className="relative h-56 bg-ivory-200">
-                  <Image
-                    src={room.images[0] || FALLBACK}
-                    alt={room.name}
-                    fill
-                    className="object-cover"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = FALLBACK; }}
-                  />
-                  <div className="absolute top-3 left-3 flex gap-2">
-                    <span className={`text-xs font-medium px-2.5 py-1 border ${CATEGORY_STYLE[room.category] ?? ''}`}>
-                      {room.category}
-                    </span>
-                    {room.amenity === 'AC' && (
-                      <span className="text-xs font-medium px-2.5 py-1 bg-white/90 text-forest-600 border border-forest-200">
-                        AC
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="p-6">
-                  <p className="text-xs text-gray-400 tracking-wider uppercase mb-1">
-                    Floor {room.floor} · Room {room.roomNumber}
-                  </p>
-                  <h2 className="font-display text-2xl font-semibold text-gray-900 mb-2">{room.name}</h2>
-                  <p className="text-sm text-gray-400 leading-relaxed mb-4">{room.description}</p>
-
-                  {/* Amenity pills */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {room.amenities.slice(0, 5).map((a) => (
-                      <span key={a} className="text-xs px-2.5 py-1 bg-ivory-50 text-gray-500 border border-ivory-200">
-                        {a}
-                      </span>
-                    ))}
-                    {room.amenities.length > 5 && (
-                      <span className="text-xs px-2 py-1 text-gray-400">+{room.amenities.length - 5} more</span>
-                    )}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="p-6 space-y-3">
-                <div className="skeleton h-48 w-full mb-4" />
-                <div className="skeleton h-6 w-2/3 rounded" />
-                <div className="skeleton h-4 w-full rounded" />
-                <div className="skeleton h-4 w-5/6 rounded" />
-              </div>
-            )}
+            <Link
+              href="/rooms"
+              className="flex items-center gap-2 text-sm text-forest-600 hover:text-forest-700 font-medium mt-2"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Another Room
+            </Link>
           </div>
 
-          {/* Booking summary */}
+          {/* Summary */}
           <div className="space-y-4">
             <div className="bg-white border border-ivory-200 p-5">
-              <h3 className="font-display text-lg font-semibold text-gray-900 mb-4">Booking Summary</h3>
+              <h3 className="font-display text-lg font-semibold text-gray-900 mb-4">Order Summary</h3>
               <div className="gold-divider mb-4" />
 
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-400 uppercase tracking-wider text-xs">Check-in</span>
-                  <span className="font-medium text-gray-800">{formatDate(checkIn)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400 uppercase tracking-wider text-xs">Check-out</span>
-                  <span className="font-medium text-gray-800">{formatDate(checkOut)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400 uppercase tracking-wider text-xs">Duration</span>
-                  <span className="font-medium text-gray-800">{nights} night{nights !== 1 ? 's' : ''}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400 uppercase tracking-wider text-xs">Guests</span>
-                  <span className="font-medium text-gray-800">{guests} guest{guests !== 1 ? 's' : ''}</span>
-                </div>
-
-                <div className="gold-divider my-2" />
-
-                {room && (
-                  <div className="flex justify-between text-xs text-gray-400">
-                    <span>{formatCurrency(room.pricePerNight)} × {nights} nights</span>
-                    <span>{formatCurrency(total)}</span>
+              <div className="space-y-2 text-sm mb-4">
+                {items.map((item) => (
+                  <div key={item.roomId} className="flex justify-between text-gray-500">
+                    <span className="truncate mr-2">{item.roomName}</span>
+                    <span className="shrink-0">{formatCurrency(item.pricePerNight * item.nights)}</span>
                   </div>
-                )}
-                <div className="flex justify-between font-semibold text-gray-900 pt-1 text-base">
-                  <span>Total</span>
-                  <span className="text-forest-600">{formatCurrency(total)}</span>
-                </div>
+                ))}
+              </div>
+
+              <div className="gold-divider mb-4" />
+              <div className="flex justify-between font-semibold text-gray-900 text-base">
+                <span>Grand Total</span>
+                <span className="text-forest-600">{formatCurrency(grandTotal)}</span>
               </div>
             </div>
 
-            {/* CTA */}
             <Link
-              href={`/checkout?roomId=${roomId}&sessionId=${sessionId}&checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}&expiresAt=${encodeURIComponent(expiresAt)}`}
+              href="/checkout"
               className="block w-full bg-forest-500 hover:bg-forest-600 text-white text-center py-3.5 text-sm font-medium tracking-wider uppercase transition-colors"
             >
               Proceed to Checkout →
             </Link>
 
-            <Link
-              href={`/rooms/${roomId}`}
-              className="block w-full bg-white border border-ivory-200 hover:border-ivory-300 text-gray-500 text-center py-3 text-sm font-medium tracking-wider uppercase transition-colors"
-            >
-              ← Change Room
-            </Link>
-
             <p className="text-xs text-gray-400 text-center">
-              Room held for 10 minutes. Timer resets if you go back.
+              Each room is held for 10 minutes. Timers run independently.
             </p>
           </div>
         </div>

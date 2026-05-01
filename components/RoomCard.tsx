@@ -19,9 +19,10 @@ interface RoomCardProps {
   delay?: number;
   checkIn?: string;
   checkOut?: string;
+  guests?: number;
 }
 
-export default function RoomCard({ room, delay = 0, checkIn, checkOut }: RoomCardProps) {
+export default function RoomCard({ room, delay = 0, checkIn, checkOut, guests }: RoomCardProps) {
   const isBooked = room.status === 'booked';
 
   const hasSlotData    = room.slotsAvailable !== undefined && room.slotsTotal !== undefined;
@@ -29,9 +30,14 @@ export default function RoomCard({ room, delay = 0, checkIn, checkOut }: RoomCar
   const isLastRoom     = hasSlotData && room.slotsAvailable === 1;
   const isLowStock     = hasSlotData && !isLastRoom && room.slotsAvailable! < room.slotsTotal!;
 
-  const roomHref = checkIn && checkOut
-    ? `/rooms/${room.id}?checkIn=${checkIn}&checkOut=${checkOut}`
-    : `/rooms/${room.id}`;
+  const roomHref = (() => {
+    const params = new URLSearchParams();
+    if (checkIn)  params.set('checkIn',  checkIn);
+    if (checkOut) params.set('checkOut', checkOut);
+    if (guests)   params.set('guests',   String(guests));
+    const qs = params.toString();
+    return qs ? `/rooms/${room.id}?${qs}` : `/rooms/${room.id}`;
+  })();
 
   const visibleAmenities = room.amenities.slice(0, MAX_AMENITY_PILLS);
   const extraCount = room.amenities.length - MAX_AMENITY_PILLS;

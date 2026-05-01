@@ -43,6 +43,7 @@ export default function RoomsPage() {
   const [checkOut, setCheckOut] = useState('');
   const [category, setCategory] = useState<RoomCategory | 'ALL'>('ALL');
   const [amenity, setAmenity] = useState<RoomAmenity | 'ALL'>('ALL');
+  const [guests, setGuests] = useState<1 | 2>(1);
   const pollRef  = useRef<NodeJS.Timeout | null>(null);
   const datesRef = useRef<{ checkIn: string; checkOut: string } | undefined>();
 
@@ -203,6 +204,24 @@ export default function RoomsPage() {
                 className="border border-ivory-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-300"
               />
             </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-gray-400 tracking-wider uppercase">Guests</label>
+              <div className="flex border border-ivory-200 bg-white overflow-hidden">
+                {([1, 2] as const).map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setGuests(n)}
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${
+                      guests === n
+                        ? 'bg-forest-500 text-white'
+                        : 'text-gray-600 hover:bg-ivory-50'
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -255,7 +274,7 @@ export default function RoomsPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {filtered.map((room, i) => (
-              <RoomCard key={room.id} room={room} delay={i * 0.07} checkIn={checkIn} checkOut={checkOut} />
+              <RoomCard key={room.id} room={room} delay={i * 0.07} checkIn={checkIn} checkOut={checkOut} guests={guests} />
             ))}
           </div>
         )}
