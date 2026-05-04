@@ -40,3 +40,22 @@ export function isInCart(roomId: string): boolean {
 export function cartTotal(): number {
   return getCart().reduce((sum, c) => sum + c.pricePerNight * c.nights, 0);
 }
+
+export function cleanExpiredCartItems(): CartItem[] {
+  const cart = getCart();
+  const now = Date.now();
+  const validItems = cart.filter((item) => !item.expiresAt || new Date(item.expiresAt).getTime() > now);
+
+  if (validItems.length !== cart.length) {
+    localStorage.setItem(KEY, JSON.stringify(validItems));
+    dispatchCartUpdate();
+  }
+
+  return validItems;
+}
+
+export function hasExpiredItems(): boolean {
+  const cart = getCart();
+  const now = Date.now();
+  return cart.some((item) => item.expiresAt && new Date(item.expiresAt).getTime() <= now);
+}

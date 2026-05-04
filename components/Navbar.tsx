@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getCart } from '@/lib/cart';
+import { getCart, cleanExpiredCartItems } from '@/lib/cart';
 
 interface Suggestion {
   id: string;
@@ -23,7 +23,10 @@ export default function Navbar() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    function syncCart() { setCartCount(getCart().length); }
+    function syncCart() {
+      cleanExpiredCartItems(); // Clean expired items first
+      setCartCount(getCart().length);
+    }
     syncCart();
     window.addEventListener('storage', syncCart);
     window.addEventListener('cart-update', syncCart);

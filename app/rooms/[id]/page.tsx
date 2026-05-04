@@ -53,6 +53,8 @@ export default function RoomDetailPage() {
   const [myLock,     setMyLock]     = useState<RoomLock | null>(null);
   const [inCart,     setInCart]     = useState(false);
   const [cartCount,  setCartCount]  = useState(0);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [roomUnavailable, setRoomUnavailable] = useState(false);
 
   // Ref keeps current params available to the polling interval without recreating it
   const statusParamsRef = useRef({ checkIn, checkOut, inventory: 5 });
@@ -68,6 +70,8 @@ export default function RoomDetailPage() {
       const res  = await fetch(`/api/rooms/${id}?${qs}`);
       const data = await res.json();
       setRoom(data);
+      setSelectedImageIndex(0);
+      setRoomUnavailable(false);
       setLockStatus({
         status:          data.lockStatus ?? 'available',
         lock:            data.lockStatus === 'locked'
@@ -91,12 +95,36 @@ export default function RoomDetailPage() {
       const res  = await fetch(`/api/booking/status/${id}?${qs}`);
       const data: LockStatusResponse = await res.json();
       setLockStatus(data);
-    } catch {}
-  }, [id]);
+
+      // Check if room became unavailable (fully booked) while user was viewing
+      const hasSlotData = data.slotsAvailable !== undefined;
+      const isFullyBooked = hasSlotData && data.slotsAvailable === 0;
+      const isLockedByMe = data.status === 'locked' && data.lock?.sessionId === mySessionId;
+
+      if (isFullyBooked && !isLockedByMe) {
+        setRoomUnavailable(true);
+      } else {
+        setRoomUnavailable(false);
+      }
+    } catch {
+      setRoomUnavailable(false);
+    }
+  }, [id, mySessionId]);
 
   useEffect(() => {
-    setInCart(isInCart(id));
-    setCartCount(getCart().length);
+    const syncCart = () => {
+      setInCart(isInCart(id));
+      setCartCount(getCart().length);
+    };
+
+    syncCart();
+    window.addEventListener('storage', syncCart);
+    window.addEventListener('cart-update', syncCart);
+
+    return () => {
+      window.removeEventListener('storage', syncCart);
+      window.removeEventListener('cart-update', syncCart);
+    };
   }, [id]);
 
   useEffect(() => { fetchRoom(); }, [fetchRoom]);
@@ -182,10 +210,10 @@ export default function RoomDetailPage() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-16">
 
         {/* Image */}
-        <div className="relative h-[50vh] min-h-[360px] w-full overflow-hidden mb-10 bg-ivory-200">
+        <div className="relative h-[50vh] min-h-[360px] w-full overflow-hidden mb-6 bg-ivory-200">
           <Image
-            src={room.images[0] || FALLBACK}
-            alt={room.name}
+            src={room.images[selectedImageIndex] || FALLBACK}
+            alt={`${room.name} image ${selectedImageIndex + 1}`}
             fill
             className="object-cover"
             onError={(e) => { (e.currentTarget as HTMLImageElement).src = FALLBACK; }}
@@ -202,6 +230,31 @@ export default function RoomDetailPage() {
             )}
           </div>
         </div>
+
+        {room.images.length > 1 && (
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 mb-10">
+            {room.images.map((src, index) => (
+              <button
+                key={`${src}-${index}`}
+                type="button"
+                onClick={() => setSelectedImageIndex(index)}
+                className={`relative h-24 w-full overflow-hidden rounded-lg border ${
+                  selectedImageIndex === index
+                    ? 'border-forest-400 ring-2 ring-forest-200'
+                    : 'border-ivory-200'
+                }`}
+              >
+                <Image
+                  src={src || FALLBACK}
+                  alt={`${room.name} thumbnail ${index + 1}`}
+                  fill
+                  className="object-cover"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = FALLBACK; }}
+                />
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
           {/* Left — Details */}
@@ -249,7 +302,15 @@ export default function RoomDetailPage() {
                 </p>
               </div>
             )}
-            {!isLockedByMe && !isLockedByOther && (
+            {roomUnavailable && !isFullyBooked && (
+              <div className="bg-amber-50 border border-amber-200 p-4 flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-amber-500" />
+                <p className="text-sm text-amber-700 font-medium">
+                  This room was just booked by another guest. Please refresh or try a different room.
+                </p>
+              </div>
+            )}
+            {!isLockedByMe && !isLockedByOther && !roomUnavailable && (
               <div className="bg-forest-50 border border-forest-200 p-4 flex items-center gap-3">
                 <div className="w-2 h-2 rounded-full bg-green-500" />
                 <p className="text-sm text-forest-700 font-medium">
@@ -349,14 +410,14 @@ export default function RoomDetailPage() {
               <>
                 <button
                   onClick={handleReserve}
-                  disabled={reserving || isLockedByOther || nights < 1}
+                  disabled={reserving || isLockedByOther || nights < 1 || roomUnavailable}
                   className={`w-full py-3 text-sm font-medium tracking-wider uppercase transition-colors ${
-                    isLockedByOther
+                    isLockedByOther || roomUnavailable
                       ? 'bg-crimson-100 text-crimson-500 cursor-not-allowed border border-crimson-200'
                       : 'bg-forest-500 hover:bg-forest-600 disabled:bg-forest-200 text-white'
                   }`}
                 >
-                  {reserving ? 'Reserving…' : isLockedByOther ? 'Not Available for These Dates' : 'Add to Cart'}
+                  {reserving ? 'Reserving…' : isLockedByOther || roomUnavailable ? 'Not Available' : 'Add to Cart'}
                 </button>
                 <p className="text-xs text-gray-400 text-center">
                   Room held for 10 min. Add more rooms or proceed to checkout.

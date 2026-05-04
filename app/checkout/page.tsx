@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import ReservationTimer from '@/components/ReservationTimer';
 import type { CartItem, GuestDetails } from '@/types';
-import { getCart, clearCart } from '@/lib/cart';
+import { getCart, clearCart, cleanExpiredCartItems } from '@/lib/cart';
 
 function formatCurrency(n: number) {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 0 }).format(n);
@@ -49,15 +49,18 @@ function CheckoutInner() {
   });
 
   useEffect(() => {
-    const cart = getCart();
-    if (cart.length === 0) {
+    const cleanedCart = cleanExpiredCartItems();
+    if (cleanedCart.length === 0) {
       router.replace('/cart');
       return;
     }
-    // If any lock is already past expiry on load, show expired immediately
-    const anyExpired = cart.some((c) => c.expiresAt && new Date(c.expiresAt).getTime() <= Date.now());
-    if (anyExpired) { setExpired(true); return; }
-    setItems(cart);
+    // Check if any remaining items are expired
+    const anyExpired = cleanedCart.some((c) => c.expiresAt && new Date(c.expiresAt).getTime() <= Date.now());
+    if (anyExpired) {
+      setExpired(true);
+      return;
+    }
+    setItems(cleanedCart);
   }, [router]);
 
   const grandTotal = items.reduce((sum, c) => sum + c.pricePerNight * c.nights, 0);

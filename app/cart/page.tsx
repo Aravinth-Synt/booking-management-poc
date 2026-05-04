@@ -6,7 +6,7 @@ import Image from 'next/image';
 import Navbar from '@/components/Navbar';
 import ReservationTimer from '@/components/ReservationTimer';
 import type { CartItem } from '@/types';
-import { getCart, removeFromCart } from '@/lib/cart';
+import { getCart, removeFromCart, cleanExpiredCartItems } from '@/lib/cart';
 
 const FALLBACK = 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&q=80';
 
@@ -117,9 +117,13 @@ function CartItemCard({ item, onRemove }: { item: CartItem; onRemove: (roomId: s
 
 function CartInner() {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [expiredItemsRemoved, setExpiredItemsRemoved] = useState(false);
 
   useEffect(() => {
-    setItems(getCart());
+    const originalCart = getCart();
+    const cleanedCart = cleanExpiredCartItems();
+    setItems(cleanedCart);
+    setExpiredItemsRemoved(cleanedCart.length < originalCart.length);
   }, []);
 
   const handleRemove = useCallback((roomId: string) => {
@@ -170,6 +174,15 @@ function CartInner() {
             {items.map((item) => (
               <CartItemCard key={item.roomId} item={item} onRemove={handleRemove} />
             ))}
+
+            {expiredItemsRemoved && (
+              <div className="bg-amber-50 border border-amber-200 p-4 flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-amber-500" />
+                <p className="text-sm text-amber-700 font-medium">
+                  Some reservations have expired and been removed from your cart. Please re-add them if needed.
+                </p>
+              </div>
+            )}
 
             <Link
               href="/rooms"
