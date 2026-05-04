@@ -26,7 +26,11 @@ export default function Navbar() {
     function syncCart() { setCartCount(getCart().length); }
     syncCart();
     window.addEventListener('storage', syncCart);
-    return () => window.removeEventListener('storage', syncCart);
+    window.addEventListener('cart-update', syncCart);
+    return () => {
+      window.removeEventListener('storage', syncCart);
+      window.removeEventListener('cart-update', syncCart);
+    };
   }, []);
 
   useEffect(() => {
