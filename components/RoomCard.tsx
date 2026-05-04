@@ -43,8 +43,9 @@ export default function RoomCard({ room, delay = 0, checkIn, checkOut, guests }:
   const extraCount = room.amenities.length - MAX_AMENITY_PILLS;
 
   return (
-    <div
-      className="room-card bg-white border border-ivory-100 overflow-hidden animate-on-load"
+    <Link
+      href={roomHref}
+      className="room-card block cursor-pointer bg-white border border-ivory-100 overflow-hidden animate-on-load focus:outline-none focus:ring-2 focus:ring-forest-200 focus:ring-offset-2 focus:ring-offset-white"
       style={{ animationDelay: `${delay}s` }}
     >
       <div className="relative h-52 bg-ivory-100 overflow-hidden">
@@ -118,16 +119,13 @@ export default function RoomCard({ room, delay = 0, checkIn, checkOut, guests }:
                   {room.slotsAvailable} of {room.slotsTotal} left
                 </span>
               )}
-              <Link
-                href={roomHref}
-                className="text-xs px-4 py-2 bg-forest-500 hover:bg-forest-600 text-white font-medium tracking-wider uppercase transition-colors"
-              >
+              <span className="text-xs px-4 py-2 bg-forest-500 text-white font-medium tracking-wider uppercase transition-colors">
                 View Room →
-              </Link>
+              </span>
             </div>
           )}
         </div>
       </div>
-    </div>
+    </Link>
   );
 }

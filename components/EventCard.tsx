@@ -22,8 +22,9 @@ export default function EventCard({ event, delay = 0 }: EventCardProps) {
   const hasPrice = Boolean(event.price);
 
   return (
-    <div
-      className="bg-white border border-ivory-100 overflow-hidden animate-on-load"
+    <Link
+      href={`/events/${event.id}`}
+      className="block bg-white border border-ivory-100 overflow-hidden animate-on-load focus:outline-none focus:ring-2 focus:ring-forest-200 focus:ring-offset-2 focus:ring-offset-white"
       style={{ animationDelay: `${delay}s` }}
     >
       {/* Image */}
@@ -66,11 +67,7 @@ export default function EventCard({ event, delay = 0 }: EventCardProps) {
         <h3 className="font-display text-xl font-semibold line-clamp-2 text-gray-900 mb-2">
           {event.name}
         </h3>
-        {/* <p className="text-sm text-gray-400 line-clamp-2 mb-2 leading-relaxed">
-          {event.description}
-        </p> */}
 
-        {/* Description (use venue + city) */}
           <label htmlFor="venue-name" className="text-sm text-gray-600 mb-3">Venue:</label>
         {(event.venueName || event.city || event.state) && (
           <p className="text-sm text-gray-400 mb-4 h-8">
@@ -91,14 +88,11 @@ export default function EventCard({ event, delay = 0 }: EventCardProps) {
             <div />
           )}
 
-          <Link
-            href={`/events/${event.id}`}
-            className="text-xs px-4 py-2 bg-forest-500 hover:bg-forest-600 text-white font-medium tracking-wider uppercase transition-colors"
-          >
+          <span className="text-xs px-4 py-2 bg-forest-500 text-white font-medium tracking-wider uppercase transition-colors">
             View Event →
-          </Link>
+          </span>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
