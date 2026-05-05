@@ -1,4 +1,4 @@
-import { ensureRedisReady, isRedisEnabled, isRedisFallbackStore } from './client';
+import { ensureRedisReady } from './client';
 import type { RoomLock, LockStatusResponse } from '@/types';
 
 const LOCK_TTL    = 600; // 10 minutes
@@ -16,21 +16,11 @@ function makeReference(): string {
 }
 
 async function getOperationalRedis() {
-  const redis = await ensureRedisReady();
-
-  if (isRedisEnabled() && isRedisFallbackStore(redis)) {
-    throw new Error('Redis is configured but unavailable');
-  }
-
-  return redis;
-}
-
-async function getReadableRedis() {
   return ensureRedisReady();
 }
 
 async function sweepAndGetMembers(roomId: string, requireOperationalRedis = false) {
-  const redis = requireOperationalRedis ? await getOperationalRedis() : await getReadableRedis();
+  const redis = requireOperationalRedis ? await getOperationalRedis() : await ensureRedisReady();
   await redis.zremrangebyscore(SLOT_KEY(roomId), '-inf', Date.now() - 1);
   const members = await redis.zrange(SLOT_KEY(roomId), 0, -1);
   return { redis, members };
