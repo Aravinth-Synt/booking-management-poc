@@ -339,14 +339,7 @@ export default function RoomDetailPage() {
             {isLockedByMe && myLock && (
               <div className="bg-forest-50 border border-forest-200 p-4">
                 <p className="text-sm font-semibold text-forest-700 mb-2">Your reservation is active</p>
-                <ReservationTimer
-                  expiresAt={myLock.expiresAt}
-                  onExpire={() => {
-                    setMyLock(null);
-                    pollLockStatus();
-                    fetchRoom();
-                  }}
-                />
+                <ReservationTimer expiresAt={myLock.expiresAt} onExpire={() => setMyLock(null)} />
               </div>
             )}
             {isLockedByOther && !hasSlotData && lockStatus.lock && (
