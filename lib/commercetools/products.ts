@@ -420,6 +420,8 @@ function ctProductDataToTourProduct(params: {
     ].filter(Boolean))
   );
 
+  const imageUrls = v.images?.map((img) => img.url).filter(Boolean) ?? [];
+
   return {
     id,
     ctId: id,
@@ -427,7 +429,8 @@ function ctProductDataToTourProduct(params: {
     name: getLocalizedValue(data.name),
     shortDescription: description.slice(0, 140),
     description,
-    imageUrl: v.images?.[0]?.url ?? '',
+    imageUrl: imageUrls[0] ?? '',
+    imageUrls,
     price,
     currency: v.prices?.[0]?.value?.currencyCode ?? 'AUD',
     durationMinutes: getAttrNumber(v, 'rezdy-duration'),

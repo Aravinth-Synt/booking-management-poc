@@ -224,6 +224,7 @@ export interface TourProduct {
   genre?: string;
   subGenre?: string;
   externalEventId?: string;
+  imageUrls?: string[];
   syncStatus: SyncStatus;
 }
 

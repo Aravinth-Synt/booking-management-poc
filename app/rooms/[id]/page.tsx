@@ -188,6 +188,25 @@ export default function RoomDetailPage() {
   const isLockedByMe   = lockStatus.status === 'locked' && lockStatus.lock?.sessionId === mySessionId;
   const isLockedByOther = isFullyBooked || (!hasSlotData && lockStatus.status === 'locked' && !isLockedByMe);
 
+  const roomImages = room?.images?.length ? room.images : [FALLBACK];
+  const selectedImage = roomImages[selectedImageIndex] ?? roomImages[0];
+
+  useEffect(() => {
+    if (roomImages.length <= 1) return;
+    const interval = setInterval(() => {
+      setSelectedImageIndex((current) => (current + 1) % roomImages.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [roomImages.length]);
+
+  const handlePrevImage = () => {
+    setSelectedImageIndex((current) => (current - 1 + roomImages.length) % roomImages.length);
+  };
+
+  const handleNextImage = () => {
+    setSelectedImageIndex((current) => (current + 1) % roomImages.length);
+  };
+
   if (!room) return (
     <div className="min-h-screen bg-ivory-50"><Navbar />
       <div className="max-w-5xl mx-auto px-4 pt-28">
@@ -210,51 +229,83 @@ export default function RoomDetailPage() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-16">
 
         {/* Image */}
-        <div className="relative h-[50vh] min-h-[360px] w-full overflow-hidden mb-6 bg-ivory-200">
-          <Image
-            src={room.images[selectedImageIndex] || FALLBACK}
-            alt={`${room.name} image ${selectedImageIndex + 1}`}
-            fill
-            className="object-cover"
-            onError={(e) => { (e.currentTarget as HTMLImageElement).src = FALLBACK; }}
-            priority
-          />
-          <div className="absolute top-4 left-4 flex gap-2">
-            <span className={`text-xs font-medium px-3 py-1 border ${CATEGORY_COLORS[room.category] ?? ''}`}>
-              {room.category}
-            </span>
-            {room.amenity === 'AC' && (
-              <span className="text-xs font-medium px-3 py-1 border bg-white/80 text-forest-600 border-forest-200">
-                Air Conditioned
-              </span>
-            )}
-          </div>
-        </div>
+        <div className="mb-6">
+          <div className="relative h-[50vh] min-h-[360px] w-full overflow-hidden rounded-3xl bg-ivory-200">
+            <Image
+              src={selectedImage || FALLBACK}
+              alt={`${room.name} image ${selectedImageIndex + 1}`}
+              fill
+              className="object-cover"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).src = FALLBACK; }}
+              priority
+            />
 
-        {room.images.length > 1 && (
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 mb-10">
-            {room.images.map((src, index) => (
-              <button
-                key={`${src}-${index}`}
-                type="button"
-                onClick={() => setSelectedImageIndex(index)}
-                className={`relative h-24 w-full overflow-hidden rounded-lg border ${
-                  selectedImageIndex === index
-                    ? 'border-forest-400 ring-2 ring-forest-200'
-                    : 'border-ivory-200'
-                }`}
-              >
-                <Image
-                  src={src || FALLBACK}
-                  alt={`${room.name} thumbnail ${index + 1}`}
-                  fill
-                  className="object-cover"
-                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = FALLBACK; }}
-                />
-              </button>
-            ))}
+            {roomImages.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={handlePrevImage}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/40 backdrop-blur-sm border border-white/80 p-2 shadow-lg transition hover:bg-white/70"
+                  aria-label="Previous image"
+                >
+                  <span className="text-lg text-gray-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                      <path fillRule="evenodd" d="M9.224 1.553a.5.5 0 0 1 .223.67L6.56 8l2.888 5.776a.5.5 0 1 1-.894.448l-3-6a.5.5 0 0 1 0-.448l3-6a.5.5 0 0 1 .67-.223"/>
+                    </svg>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNextImage}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/40 backdrop-blur-sm border border-white/80 p-2 shadow-lg transition hover:bg-white/70"
+                  aria-label="Next image"
+                >
+                  <span className="text-lg text-gray-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                      <path fillRule="evenodd" d="M6.776 1.553a.5.5 0 0 1 .671.223l3 6a.5.5 0 0 1 0 .448l-3 6a.5.5 0 1 1-.894-.448L9.44 8 6.553 2.224a.5.5 0 0 1 .223-.671"/>
+                    </svg>
+                  </span>
+                </button>
+              </>
+            )}
+
+            <div className="absolute top-4 left-4 flex gap-2">
+              <span className={`text-xs font-medium px-3 py-1 border ${CATEGORY_COLORS[room.category] ?? ''}`}>
+                {room.category}
+              </span>
+              {room.amenity === 'AC' && (
+                <span className="text-xs font-medium px-3 py-1 border bg-white/80 text-forest-600 border-forest-200">
+                  Air Conditioned
+                </span>
+              )}
+            </div>
           </div>
-        )}
+
+          {roomImages.length > 1 && (
+            <div className="mt-4 grid grid-cols-4 gap-3">
+              {roomImages.map((image, index) => (
+                <button
+                  key={`${image}-${index}`}
+                  type="button"
+                  onClick={() => setSelectedImageIndex(index)}
+                  className={`relative h-28 overflow-hidden rounded-2xl border transition-shadow ${
+                    index === selectedImageIndex
+                      ? 'border-forest-500 shadow-lg shadow-forest-200/20'
+                      : 'border-ivory-200 hover:border-forest-300'
+                  }`}
+                >
+                  <Image
+                    src={image || FALLBACK}
+                    alt={`${room.name} thumbnail ${index + 1}`}
+                    fill
+                    className="object-cover"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = FALLBACK; }}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
           {/* Left — Details */}
