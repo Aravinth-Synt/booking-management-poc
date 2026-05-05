@@ -4,6 +4,13 @@ import { getSlotStatus } from '@/lib/redis/roomLock';
 import { MOCK_ROOMS } from '@/data/mockRooms';
 import type { LockStatusResponse, RoomProduct } from '@/types';
 
+function isRedisAvailabilityError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes('redis')
+    || normalized.includes('stream isn\'t writeable')
+    || normalized.includes('enableofflinequeue');
+}
+
 async function getSlotStatusSafe(
   roomId: string,
   checkIn?: string,
@@ -21,7 +28,7 @@ async function getSlotStatusSafe(
         slotsAvailable: inventory,
         slotsTotal: inventory,
       },
-      error: message,
+      error: isRedisAvailabilityError(message) ? undefined : message,
     };
   }
 }
