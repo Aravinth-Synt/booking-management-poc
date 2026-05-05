@@ -128,7 +128,7 @@ function createClientIfNeeded(): RedisStore | typeof memoryStore {
     global._redisStore = store;
   }
 
-  return global._redisStore;
+  return global._redisStore ?? memoryStore;
 }
 
 export default function getRedisClient(): RedisStore | typeof memoryStore {
