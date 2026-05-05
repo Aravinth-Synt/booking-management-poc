@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { reserveSlot } from '@/lib/redis/roomLock';
 
+function statusForError(message: string): number {
+  return message.includes('Redis') ? 503 : 500;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json() as {
@@ -35,6 +39,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Internal error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: statusForError(message) });
   }
 }

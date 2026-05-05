@@ -31,21 +31,17 @@ export async function GET(request: NextRequest) {
 
   const withSlots = await Promise.all(
     rooms.map(async (room) => {
-      try {
-        const inventory  = room.inventory ?? 5;
-        const slotStatus = await getSlotStatus(room.id, checkIn, checkOut, inventory);
-        return {
-          ...room,
-          lockStatus:      slotStatus.status,
-          lockedUntil:     slotStatus.lock?.expiresAt,
-          lockedBySession: slotStatus.lock?.sessionId,
-          dateConflict:    slotStatus.dateConflict,
-          slotsAvailable:  slotStatus.slotsAvailable,
-          slotsTotal:      slotStatus.slotsTotal,
-        } as RoomProduct;
-      } catch {
-        return room;
-      }
+      const inventory  = room.inventory ?? 5;
+      const slotStatus = await getSlotStatus(room.id, checkIn, checkOut, inventory);
+      return {
+        ...room,
+        lockStatus:      slotStatus.status,
+        lockedUntil:     slotStatus.lock?.expiresAt,
+        lockedBySession: slotStatus.lock?.sessionId,
+        dateConflict:    slotStatus.dateConflict,
+        slotsAvailable:  slotStatus.slotsAvailable,
+        slotsTotal:      slotStatus.slotsTotal,
+      } as RoomProduct;
     }),
   );
 

@@ -68,6 +68,7 @@ export default function RoomDetailPage() {
       if (checkIn)  qs.set('checkIn',  checkIn);
       if (checkOut) qs.set('checkOut', checkOut);
       const res  = await fetch(`/api/rooms/${id}?${qs}`);
+      if (!res.ok) throw new Error('Failed to load room');
       const data = await res.json();
       setRoom(data);
       setSelectedImageIndex(0);
@@ -93,6 +94,7 @@ export default function RoomDetailPage() {
       if (ci) qs.set('checkIn',  ci);
       if (co) qs.set('checkOut', co);
       const res  = await fetch(`/api/booking/status/${id}?${qs}`);
+      if (!res.ok) throw new Error('Failed to load lock status');
       const data: LockStatusResponse = await res.json();
       setLockStatus(data);
 
@@ -175,7 +177,11 @@ export default function RoomDetailPage() {
           slotsAvailable:   0,
           slotsTotal:       data.inventory,
         });
+      } else {
+        throw new Error(data.error ?? 'Unable to reserve room');
       }
+    } catch {
+      setRoomUnavailable(true);
     } finally {
       setReserving(false);
     }

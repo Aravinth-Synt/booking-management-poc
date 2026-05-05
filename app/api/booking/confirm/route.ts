@@ -5,6 +5,11 @@ import { getRoomById } from '@/lib/commercetools/products';
 import { MOCK_ROOMS } from '@/data/mockRooms';
 import type { BookingRequest } from '@/types';
 
+function statusForError(message: string): number {
+  if (message.includes('Reservation expired') || message.includes('Session mismatch')) return 409;
+  return message.includes('Redis') ? 503 : 500;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json() as BookingRequest;
@@ -37,6 +42,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ confirmation });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Internal error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: statusForError(message) });
   }
 }

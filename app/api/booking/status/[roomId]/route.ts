@@ -9,7 +9,8 @@ export async function GET(req: NextRequest, { params }: { params: { roomId: stri
     const inventory = Number(searchParams.get('inventory') ?? '5');
     const status    = await getSlotStatus(params.roomId, checkIn, checkOut, inventory);
     return NextResponse.json(status);
-  } catch {
-    return NextResponse.json({ status: 'available' });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Internal error';
+    return NextResponse.json({ error: message }, { status: message.includes('Redis') ? 503 : 500 });
   }
 }

@@ -65,6 +65,7 @@ export default function RoomsPage() {
       if (dates?.checkIn)  qs.set('checkIn',  dates.checkIn);
       if (dates?.checkOut) qs.set('checkOut', dates.checkOut);
       const res  = await fetch(qs.size > 0 ? `/api/rooms?${qs}` : '/api/rooms');
+      if (!res.ok) throw new Error('Failed to load rooms');
       const data = await res.json();
       setRooms(data.rooms ?? MOCK_ROOMS);
       setSource(data.source ?? 'mock');
@@ -95,7 +96,10 @@ export default function RoomsPage() {
 
           const lockData: LockStatusResponse = await fetch(
             `/api/booking/status/${room.id}${qs}`
-          ).then((r) => r.json());
+          ).then(async (r) => {
+            if (!r.ok) throw new Error(`Failed to load lock status for room ${room.id}`);
+            return r.json();
+          });
           const locked = lockData.status === 'locked' && isEffectivelyLocked(lockData.dateConflict);
           return {
             ...room,
