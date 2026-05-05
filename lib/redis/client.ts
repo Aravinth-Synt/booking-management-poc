@@ -16,15 +16,29 @@ export function isRedisFallbackStore(client: Redis | typeof memoryStore): client
   return client === memoryStore;
 }
 
+function hasUsableRedisClient(client: Redis | undefined): client is Redis {
+  if (!client) return false;
+  return !['end', 'close'].includes(client.status);
+}
+
+function resetRedisClient() {
+  global._redisClient = undefined;
+  global._redisStore = undefined;
+}
+
 function createClient(): Redis | typeof memoryStore {
-  if (global._redisStore) return global._redisStore;
+  if (global._redisStore) {
+    if (isRedisFallbackStore(global._redisStore)) return global._redisStore;
+    if (hasUsableRedisClient(global._redisStore)) return global._redisStore;
+    resetRedisClient();
+  }
 
   if (!isRedisEnabled()) {
     global._redisStore = memoryStore;
     return global._redisStore;
   }
 
-  if (!global._redisClient) {
+  if (!hasUsableRedisClient(global._redisClient)) {
     const client = new Redis(process.env.REDIS_URL!, {
       retryStrategy:       () => null,
       maxRetriesPerRequest: 1,
@@ -43,6 +57,9 @@ function createClient(): Redis | typeof memoryStore {
 
     client.on('end', () => {
       console.warn('[Redis] connection closed');
+      if (global._redisClient === client) {
+        resetRedisClient();
+      }
     });
 
     global._redisClient = client;
@@ -57,12 +74,15 @@ export default function getRedisClient(): Redis | typeof memoryStore {
 }
 
 export async function ensureRedisReady(): Promise<Redis | typeof memoryStore> {
-  const client = getRedisClient();
+  const client = createClient();
 
   if (isRedisFallbackStore(client)) return client;
 
   if (client.status === 'wait') {
     await client.connect();
+  } else if (['end', 'close'].includes(client.status)) {
+    resetRedisClient();
+    return ensureRedisReady();
   }
 
   return client;
