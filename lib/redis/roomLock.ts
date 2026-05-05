@@ -25,8 +25,12 @@ async function getOperationalRedis() {
   return redis;
 }
 
-async function sweepAndGetMembers(roomId: string) {
-  const redis = await getOperationalRedis();
+async function getReadableRedis() {
+  return ensureRedisReady();
+}
+
+async function sweepAndGetMembers(roomId: string, requireOperationalRedis = false) {
+  const redis = requireOperationalRedis ? await getOperationalRedis() : await getReadableRedis();
   await redis.zremrangebyscore(SLOT_KEY(roomId), '-inf', Date.now() - 1);
   const members = await redis.zrange(SLOT_KEY(roomId), 0, -1);
   return { redis, members };
@@ -41,7 +45,7 @@ export async function reserveSlot(
   guestName?: string,
 ): Promise<{ success: boolean; slotsUsed: number; inventory: number; expiresAt: string; lock?: RoomLock }> {
   const expiresAt = new Date(Date.now() + LOCK_TTL * 1000).toISOString();
-  const { redis, members } = await sweepAndGetMembers(roomId);
+  const { redis, members } = await sweepAndGetMembers(roomId, true);
 
   const detailKeys = members.map((sid) => DETAIL_KEY(roomId, sid));
   const raws: (string | null)[] = detailKeys.length > 0 ? await redis.mget(detailKeys) : [];
