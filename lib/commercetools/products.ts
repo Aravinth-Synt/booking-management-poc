@@ -1,5 +1,5 @@
 import { ctRequest } from './auth';
-import getRedisClient from '@/lib/redis/client';
+import { ensureRedisReady } from '@/lib/redis/client';
 import type {
   CTAttribute,
   CTProduct,
@@ -281,7 +281,7 @@ function buildProductsPath(params: {
 
 async function readCache<T>(key: string): Promise<T | null> {
   try {
-    const redis = getRedisClient();
+    const redis = await ensureRedisReady();
     const raw = await redis.get(key);
     return raw ? (JSON.parse(raw) as T) : null;
   } catch {
@@ -291,7 +291,7 @@ async function readCache<T>(key: string): Promise<T | null> {
 
 async function writeCache<T>(key: string, value: T): Promise<void> {
   try {
-    const redis = getRedisClient();
+    const redis = await ensureRedisReady();
     await redis.set(key, JSON.stringify(value), 'EX', PRODUCT_CACHE_TTL_SECONDS);
   } catch {
     // Ignore Redis failures so catalogue requests can still succeed.
