@@ -1,4 +1,4 @@
-import getRedisClient, { ensureRedisReady, isRedisEnabled, isRedisFallbackStore } from './client';
+import { ensureRedisReady, isRedisEnabled, isRedisFallbackStore } from './client';
 import type { RoomLock, LockStatusResponse } from '@/types';
 
 const LOCK_TTL    = 600; // 10 minutes
@@ -171,5 +171,3 @@ export const confirmRoomLock       = confirmSlot;
 export const getRoomLockStatus     = (roomId: string, checkIn?: string, checkOut?: string, inventory?: number) =>
   getSlotStatus(roomId, checkIn, checkOut, inventory);
 export const isRoomLockedBySession = isSessionSlotActive;
-
-void getRedisClient();
