@@ -2,6 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRoomById } from '@/lib/commercetools/products';
 import { getSlotStatus } from '@/lib/redis/roomLock';
 import { MOCK_ROOMS } from '@/data/mockRooms';
+import type { LockStatusResponse } from '@/types';
+
+async function getSlotStatusSafe(
+  roomId: string,
+  checkIn?: string,
+  checkOut?: string,
+  inventory = 5,
+): Promise<LockStatusResponse> {
+  try {
+    return await getSlotStatus(roomId, checkIn, checkOut, inventory);
+  } catch {
+    return {
+      status: 'available',
+      slotsAvailable: inventory,
+      slotsTotal: inventory,
+    };
+  }
+}
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const { id } = params;
@@ -17,7 +35,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 
   const inventory  = room.inventory ?? 5;
-  const slotStatus = await getSlotStatus(id, checkIn, checkOut, inventory);
+  const slotStatus = await getSlotStatusSafe(id, checkIn, checkOut, inventory);
   return NextResponse.json({
     ...room,
     lockStatus:      slotStatus.status,

@@ -37,10 +37,9 @@ export default function HomeShowcase() {
           fetch('/api/rooms'),
           fetch('/api/events'),
         ]);
-
         const [roomsData, eventsData] = await Promise.all([
-          roomsRes.json(),
-          eventsRes.json(),
+          roomsRes.ok ? roomsRes.json() : Promise.resolve({ rooms: [] }),
+          eventsRes.ok ? eventsRes.json() : Promise.resolve({ events: [] }),
         ]);
 
         if (!active) return;

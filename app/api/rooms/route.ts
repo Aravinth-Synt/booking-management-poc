@@ -2,7 +2,29 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRooms, searchRooms } from '@/lib/commercetools/products';
 import { getSlotStatus } from '@/lib/redis/roomLock';
 import { MOCK_ROOMS } from '@/data/mockRooms';
-import type { RoomProduct } from '@/types';
+import type { LockStatusResponse, RoomProduct } from '@/types';
+
+async function getSlotStatusSafe(
+  roomId: string,
+  checkIn?: string,
+  checkOut?: string,
+  inventory = 5,
+): Promise<{ status: LockStatusResponse; error?: string }> {
+  try {
+    const status = await getSlotStatus(roomId, checkIn, checkOut, inventory);
+    return { status };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to load room availability.';
+    return {
+      status: {
+        status: 'available',
+        slotsAvailable: inventory,
+        slotsTotal: inventory,
+      },
+      error: message,
+    };
+  }
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -32,7 +54,8 @@ export async function GET(request: NextRequest) {
   const withSlots = await Promise.all(
     rooms.map(async (room) => {
       const inventory  = room.inventory ?? 5;
-      const slotStatus = await getSlotStatus(room.id, checkIn, checkOut, inventory);
+      const { status: slotStatus, error: slotError } = await getSlotStatusSafe(room.id, checkIn, checkOut, inventory);
+      if (!error && slotError) error = slotError;
       return {
         ...room,
         lockStatus:      slotStatus.status,
