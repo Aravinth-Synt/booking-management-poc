@@ -26,6 +26,12 @@ function resetRedisClient() {
   global._redisStore = undefined;
 }
 
+function fallbackToMemoryStore() {
+  resetRedisClient();
+  global._redisStore = memoryStore;
+  return memoryStore;
+}
+
 function createClient(): Redis | typeof memoryStore {
   if (global._redisStore) {
     if (isRedisFallbackStore(global._redisStore)) return global._redisStore;
@@ -78,11 +84,15 @@ export async function ensureRedisReady(): Promise<Redis | typeof memoryStore> {
 
   if (isRedisFallbackStore(client)) return client;
 
-  if (client.status === 'wait') {
-    await client.connect();
-  } else if (['end', 'close'].includes(client.status)) {
-    resetRedisClient();
-    return ensureRedisReady();
+  try {
+    if (client.status === 'wait') {
+      await client.connect();
+    } else if (['end', 'close'].includes(client.status)) {
+      resetRedisClient();
+      return ensureRedisReady();
+    }
+  } catch {
+    return fallbackToMemoryStore();
   }
 
   return client;

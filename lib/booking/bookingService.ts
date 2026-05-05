@@ -1,4 +1,4 @@
-import getRedisClient from '@/lib/redis/client';
+import { ensureRedisReady } from '@/lib/redis/client';
 import { confirmRoomLock } from '@/lib/redis/roomLock';
 import type { BookingRequest, BookingConfirmation } from '@/types';
 
@@ -32,7 +32,7 @@ export async function createBooking(
 
   // Best-effort Redis storage — booking proceeds even if Redis is unavailable
   try {
-    const redis = getRedisClient();
+    const redis = await ensureRedisReady();
     await redis.set(`booking:${bookingReference}`, JSON.stringify(confirmation), 'EX', BOOKING_TTL);
   } catch {
     // Redis unavailable — confirmation still returned to the user
@@ -43,7 +43,7 @@ export async function createBooking(
 
 export async function getBooking(bookingReference: string): Promise<BookingConfirmation | null> {
   try {
-    const redis = getRedisClient();
+    const redis = await ensureRedisReady();
     const raw = await redis.get(`booking:${bookingReference}`);
     if (!raw) return null;
     return JSON.parse(raw) as BookingConfirmation;
