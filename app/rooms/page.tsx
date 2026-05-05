@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
 import RoomCard from '@/components/RoomCard';
 import type { RoomProduct, RoomCategory, RoomAmenity, LockStatusResponse } from '@/types';
@@ -46,6 +46,7 @@ export default function RoomsPage() {
   const [guests, setGuests] = useState<1 | 2>(1);
   const pollRef  = useRef<NodeJS.Timeout | null>(null);
   const datesRef = useRef<{ checkIn: string; checkOut: string } | undefined>();
+  const roomsRef = useRef<RoomProduct[]>([]);
 
   // Keep datesRef current so the polling interval always uses the latest dates
   // without needing to be recreated every time dates change.
@@ -53,7 +54,11 @@ export default function RoomsPage() {
     datesRef.current = checkIn && checkOut ? { checkIn, checkOut } : undefined;
   }, [checkIn, checkOut]);
 
-  async function fetchRooms(search = '', dates?: { checkIn: string; checkOut: string }) {
+  useEffect(() => {
+    roomsRef.current = rooms;
+  }, [rooms]);
+
+  const fetchRooms = useCallback(async (search = '', dates?: { checkIn: string; checkOut: string }) => {
     try {
       const qs = new URLSearchParams();
       if (search.trim())  qs.set('q',        search.trim());
@@ -71,36 +76,49 @@ export default function RoomsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  async function refreshLockStatuses(currentRooms: RoomProduct[]) {
+  const refreshLockStatuses = useCallback(async () => {
+    const currentRooms = roomsRef.current;
+    if (currentRooms.length === 0) return;
+
     const dates = datesRef.current;
-    // Build the date query string once for all rooms in this poll cycle
-    const qs = dates ? `?checkIn=${dates.checkIn}&checkOut=${dates.checkOut}` : '';
     const updated = await Promise.all(
       currentRooms.map(async (room) => {
         try {
+          const qs = new URLSearchParams();
+          qs.set('inventory', String(room.inventory ?? 5));
+          if (dates?.checkIn) qs.set('checkIn', dates.checkIn);
+          if (dates?.checkOut) qs.set('checkOut', dates.checkOut);
           const lockData: LockStatusResponse = await fetch(
-            `/api/booking/status/${room.id}${qs}`
+            `/api/booking/status/${room.id}?${qs.toString()}`
           ).then((r) => r.json());
           const locked = lockData.status === 'locked' && isEffectivelyLocked(lockData.dateConflict);
           return {
             ...room,
             lockStatus:   locked ? ('locked' as const) : ('available' as const),
+            lockedBySession: lockData.lock?.sessionId,
             lockedUntil:  lockData.lock?.expiresAt,
             dateConflict: lockData.dateConflict,
+            slotsAvailable: lockData.slotsAvailable,
+            slotsTotal: lockData.slotsTotal,
           };
         } catch {
           return room;
         }
       })
     );
-    // Skip re-render if lock statuses haven't changed
     const changed = updated.some(
-      (r, i) => r.lockStatus !== currentRooms[i].lockStatus || r.dateConflict !== currentRooms[i].dateConflict
+      (r, i) =>
+        r.lockStatus !== currentRooms[i].lockStatus ||
+        r.lockedBySession !== currentRooms[i].lockedBySession ||
+        r.lockedUntil !== currentRooms[i].lockedUntil ||
+        r.dateConflict !== currentRooms[i].dateConflict ||
+        r.slotsAvailable !== currentRooms[i].slotsAvailable ||
+        r.slotsTotal !== currentRooms[i].slotsTotal
     );
     if (changed) setRooms(updated);
-  }
+  }, []);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -108,15 +126,15 @@ export default function RoomsPage() {
       fetchRooms(query, datesRef.current);
     }, 250);
     return () => clearTimeout(timeout);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, checkIn, checkOut]);
+  }, [fetchRooms, query, checkIn, checkOut]);
 
   useEffect(() => {
-    if (rooms.length === 0) return;
-    pollRef.current = setInterval(() => refreshLockStatuses(rooms), 15_000);
+    if (roomsRef.current.length === 0) return;
+    pollRef.current = setInterval(() => {
+      refreshLockStatuses();
+    }, 5_000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rooms.length]);
+  }, [refreshLockStatuses, rooms.length]);
 
   const categories: Array<RoomCategory | 'ALL'> = [
     'ALL',
